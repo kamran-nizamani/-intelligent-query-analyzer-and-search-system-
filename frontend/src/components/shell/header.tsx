@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useTransition } from "react";
 import {
   ChevronRight,
   Menu,
@@ -13,6 +13,7 @@ import {
 import type { AppTheme } from "@/types/search";
 import type { HealthResponse } from "@/lib/api-client";
 import type { NavItem } from "./sidebar";
+import { yieldToMain } from "@/lib/scheduler";
 
 interface HeaderProps {
   currentView: NavItem;
@@ -177,7 +178,10 @@ export function Header({
                 type="button"
                 className="btn-secondary"
                 style={{ fontSize: 12, marginTop: 10 }}
-                onClick={onRetryConnection}
+                onClick={async () => {
+                  await yieldToMain();
+                  onRetryConnection();
+                }}
               >
                 <RefreshCw size={12} aria-hidden="true" />
                 <span>Re-check connection</span>
