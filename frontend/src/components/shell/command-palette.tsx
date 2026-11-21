@@ -63,7 +63,7 @@ export function CommandPalette({
         aria-modal="true"
         aria-label="Quick search and navigation"
         className="modal-dialog"
-        style={{ maxWidth: 580, padding: 0, overflow: "hidden" }}
+        style={{ maxWidth: "min(580px, calc(100vw - 20px))", padding: 0, overflow: "hidden" }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Search header */}

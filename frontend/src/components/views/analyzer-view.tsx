@@ -116,13 +116,13 @@ export function AnalyzerView({
             e.preventDefault();
             void handleCompile(inputQuery);
           }}
-          style={{ display: "flex", gap: 10, alignItems: "center" }}
+          style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}
         >
           <div
             className="search-input-box"
-            style={{ flex: 1, padding: "10px 14px", boxShadow: "none" }}
+            style={{ flex: 1, minWidth: "min(100%, 200px)", padding: "10px 14px", boxShadow: "none" }}
           >
-            <Terminal size={16} style={{ color: "var(--text-muted)" }} />
+            <Terminal size={16} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
             <input
               type="text"
               value={inputQuery}
@@ -133,7 +133,7 @@ export function AnalyzerView({
             />
           </div>
 
-          <button type="submit" className="btn-primary" style={{ padding: "10px 18px" }} disabled={compiling || !inputQuery.trim()}>
+          <button type="submit" className="btn-primary" style={{ padding: "10px 18px", flexShrink: 0 }} disabled={compiling || !inputQuery.trim()}>
             <Play size={14} />
             <span>{compiling ? "Compiling..." : "Compile & Analyze"}</span>
           </button>
@@ -188,7 +188,7 @@ export function AnalyzerView({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))",
           gap: 12,
           marginBottom: 20,
         }}
@@ -362,7 +362,7 @@ export function AnalyzerView({
             </p>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))", gap: 16 }}>
             {/* Visual AST Node Tree */}
             <div
               style={{
@@ -424,13 +424,15 @@ export function AnalyzerView({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: 8,
                 padding: 12,
                 borderRadius: 6,
                 background: "var(--bg-card-subtle)",
                 border: "1px solid var(--border-subtle)",
               }}
             >
-              <div>
+              <div style={{ minWidth: 0 }}>
                 <strong style={{ fontSize: 13, color: "var(--text-main)" }}>Target Symbol Resolution</strong>
                 <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
                   Checks if requested symbol type exists in index schemas
@@ -446,13 +448,15 @@ export function AnalyzerView({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: 8,
                 padding: 12,
                 borderRadius: 6,
                 background: "var(--bg-card-subtle)",
                 border: "1px solid var(--border-subtle)",
               }}
             >
-              <div>
+              <div style={{ minWidth: 0 }}>
                 <strong style={{ fontSize: 13, color: "var(--text-main)" }}>Language Scope Invariant</strong>
                 <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
                   Ensures target language is compatible with target symbol type
@@ -468,13 +472,15 @@ export function AnalyzerView({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: 8,
                 padding: 12,
                 borderRadius: 6,
                 background: "var(--bg-card-subtle)",
                 border: "1px solid var(--border-subtle)",
               }}
             >
-              <div>
+              <div style={{ minWidth: 0 }}>
                 <strong style={{ fontSize: 13, color: "var(--text-main)" }}>Search Vocabulary Invariant</strong>
                 <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
                   Checks the query against the compiler&apos;s supported query vocabulary
@@ -536,7 +542,7 @@ export function AnalyzerView({
             </pre>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))", gap: 12 }}>
             <div style={{ background: "var(--bg-card-subtle)", padding: 12, borderRadius: 6 }}>
               <div style={{ fontSize: 11, color: "var(--text-faint)", fontWeight: 700 }}>OPERATION</div>
               <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-main)", marginTop: 4 }}>
@@ -571,7 +577,7 @@ export function AnalyzerView({
             </p>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))", gap: 16 }}>
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", marginBottom: 6 }}>
                 Before Optimization (Raw IR)

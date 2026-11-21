@@ -51,7 +51,7 @@ export function PreviewModal({ item, onClose }: PreviewModalProps) {
         aria-labelledby="preview-title"
         tabIndex={-1}
         className="modal-dialog"
-        style={{ maxWidth: 720, padding: 0, overflow: "hidden" }}
+        style={{ maxWidth: "min(720px, calc(100vw - 20px))", padding: 0, overflow: "hidden" }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
@@ -60,18 +60,20 @@ export function PreviewModal({ item, onClose }: PreviewModalProps) {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 10,
             padding: "16px 20px",
             borderBottom: "1px solid var(--border-subtle)",
             background: "var(--bg-card)",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <Icon size={18} style={{ color: isCode ? "#60a5fa" : "#fb7185" }} />
-            <div>
-              <div id="preview-title" style={{ fontSize: 15, fontWeight: 700, color: "var(--text-main)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
+            <Icon size={18} style={{ color: isCode ? "#60a5fa" : "#fb7185", flexShrink: 0 }} />
+            <div style={{ minWidth: 0 }}>
+              <div id="preview-title" style={{ fontSize: 15, fontWeight: 700, color: "var(--text-main)", overflowWrap: "anywhere" }}>
                 {isSearchResult ? item.title : item.name}
               </div>
-              <div style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)", overflowWrap: "anywhere" }}>
                 {item.path}
               </div>
             </div>
