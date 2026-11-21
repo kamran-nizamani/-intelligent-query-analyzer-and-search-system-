@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   AudioLines,
@@ -28,6 +28,7 @@ import type {
 } from "@/types/search";
 import { sampleQueries } from "@/data/example-queries";
 import { extractHighlightTerms, highlightText } from "@/lib/highlight";
+import { yieldToMain } from "@/lib/scheduler";
 import type { ToastTone } from "../ui/toast";
 
 interface SearchViewProps {
@@ -168,8 +169,14 @@ export function SearchView({
   const handleCopyPath = async (path: string, id: string) => {
     try {
       await navigator.clipboard.writeText(path);
-      setCopiedId(id);
-      setTimeout(() => setCopiedId(null), 2000);
+      startTransition(() => {
+        setCopiedId(id);
+      });
+      setTimeout(() => {
+        startTransition(() => {
+          setCopiedId(null);
+        });
+      }, 2000);
     } catch {
       onNotify("Couldn't copy to the clipboard.", "error");
     }
@@ -228,7 +235,11 @@ export function SearchView({
           {trace && (
             <button
               type="button"
-              onClick={() => setShowTraceDrawer((prev) => !prev)}
+              onClick={() => {
+                startTransition(() => {
+                  setShowTraceDrawer((prev) => !prev);
+                });
+              }}
               className="btn-secondary"
               aria-expanded={showTraceDrawer}
               aria-controls="trace-drawer"
@@ -391,7 +402,11 @@ export function SearchView({
 
             <button
               type="button"
-              onClick={() => setShowFiltersPanel((prev) => !prev)}
+              onClick={() => {
+                startTransition(() => {
+                  setShowFiltersPanel((prev) => !prev);
+                });
+              }}
               className="btn-secondary"
               aria-expanded={showFiltersPanel}
               aria-controls="filters-panel"
@@ -476,8 +491,10 @@ export function SearchView({
                 className="btn-secondary"
                 style={{ fontSize: 11.5, padding: "4px 10px", alignSelf: "flex-end" }}
                 onClick={() => {
-                  setSelectedKind("all");
-                  setSelectedType("ALL");
+                  startTransition(() => {
+                    setSelectedKind("all");
+                    setSelectedType("ALL");
+                  });
                 }}
               >
                 Reset filters
@@ -593,7 +610,11 @@ export function SearchView({
           testId="search-error"
           action={
             query.trim() ? (
-              <button type="button" className="btn-secondary" onClick={() => onExecuteSearch(query, searchMode)}>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => onExecuteSearch(query, searchMode)}
+              >
                 Try again
               </button>
             ) : null
@@ -640,8 +661,10 @@ export function SearchView({
                 type="button"
                 className="btn-secondary"
                 onClick={() => {
-                  setSelectedKind("all");
-                  setSelectedType("ALL");
+                  startTransition(() => {
+                    setSelectedKind("all");
+                    setSelectedType("ALL");
+                  });
                 }}
               >
                 Reset filters

@@ -3,6 +3,8 @@
  * Generates 384-dimensional normalized float vectors for query and chunk embeddings.
  */
 
+import { yieldToMain } from "../scheduler";
+
 export interface EmbeddingProgress {
   status: "init" | "downloading" | "ready" | "processing";
   progress?: number;
@@ -31,6 +33,7 @@ export async function getWebEmbedder(
       }
 
       onProgress?.({ status: "init" });
+      await yieldToMain();
 
       const { pipeline, env } = await import("@xenova/transformers");
       env.allowLocalModels = false;
@@ -50,6 +53,7 @@ export async function getWebEmbedder(
       });
 
       onProgress?.({ status: "ready" });
+      await yieldToMain();
       extractorInstance = pipe as unknown as FeatureExtractor;
       return extractorInstance;
     })();
@@ -66,12 +70,14 @@ export async function embedText(
   text: string,
   onProgress?: (p: EmbeddingProgress) => void
 ): Promise<number[]> {
+  await yieldToMain();
   const extractor = await getWebEmbedder(onProgress);
   const clean = text.trim();
   if (!clean) {
     return new Array(384).fill(0);
   }
 
+  await yieldToMain();
   const output = await extractor(clean, { pooling: "mean", normalize: true });
   return Array.from(output.data);
 }
@@ -91,6 +97,7 @@ export async function embedBatch(
     if (!text) {
       results.push(new Array(384).fill(0));
     } else {
+      await yieldToMain();
       const output = await extractor(text, { pooling: "mean", normalize: true });
       results.push(Array.from(output.data));
     }

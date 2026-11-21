@@ -613,6 +613,19 @@ html, body {
   border-color: rgba(255, 255, 255, 0.15);
 }
 
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin-icon {
+  animation: spin 1s linear infinite;
+}
+
 /* Badges & Tags */
 .badge {
   display: inline-flex;
