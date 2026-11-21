@@ -103,10 +103,10 @@ export function PipelineView({
             e.preventDefault();
             void handleRunPipeline(query);
           }}
-          style={{ display: "flex", gap: 10, alignItems: "center" }}
+          style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}
         >
-          <div className="search-input-box" style={{ flex: 1, padding: "10px 14px", boxShadow: "none" }}>
-            <GitBranch size={16} style={{ color: "var(--accent-text)" }} />
+          <div className="search-input-box" style={{ flex: 1, minWidth: "min(100%, 200px)", padding: "10px 14px", boxShadow: "none" }}>
+            <GitBranch size={16} style={{ color: "var(--accent-text)", flexShrink: 0 }} />
             <input
               type="text"
               value={query}
@@ -116,7 +116,7 @@ export function PipelineView({
               className="search-main-input"
             />
           </div>
-          <button type="submit" className="btn-primary" style={{ padding: "10px 18px" }} disabled={loading || !query.trim()}>
+          <button type="submit" className="btn-primary" style={{ padding: "10px 18px", flexShrink: 0 }} disabled={loading || !query.trim()}>
             <Play size={14} />
             <span>{loading ? "Processing..." : "Process Query"}</span>
           </button>
@@ -276,12 +276,14 @@ export function PipelineView({
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 12,
             borderBottom: "1px solid var(--border-subtle)",
             paddingBottom: 14,
             marginBottom: 16,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
             <div
               style={{
                 width: 32,
@@ -293,21 +295,22 @@ export function PipelineView({
                 alignItems: "center",
                 justifyContent: "center",
                 fontWeight: 800,
+                flexShrink: 0,
               }}
             >
               {selectedStageIndex + 1}
             </div>
-            <div>
-              <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-main)" }}>
+            <div style={{ minWidth: 0 }}>
+              <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-main)", overflowWrap: "anywhere" }}>
                 {selectedStage.name}
               </h2>
-              <span style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
+              <span style={{ fontSize: 11.5, color: "var(--text-muted)", overflowWrap: "anywhere" }}>
                 {selectedStage.summary}
               </span>
             </div>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
             <span className="badge badge-lexical" style={{ fontSize: 11 }}>
               <CheckCircle2 size={12} />
               <span>Status: Completed</span>
@@ -337,7 +340,7 @@ export function PipelineView({
         </p>
 
         {/* Input vs Output Previews */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))", gap: 16 }}>
           <div>
             <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", marginBottom: 6 }}>
               Stage Input Preview

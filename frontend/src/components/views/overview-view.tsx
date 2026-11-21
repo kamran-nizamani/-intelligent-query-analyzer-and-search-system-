@@ -95,8 +95,8 @@ export function OverviewView({
           </p>
 
           {/* Quick Search Form */}
-          <form onSubmit={handleSearchSubmit} className="search-input-box" style={{ maxWidth: 680 }}>
-            <Search size={18} style={{ color: "var(--accent-text)" }} />
+          <form onSubmit={handleSearchSubmit} className="search-input-box" style={{ maxWidth: 680, flexWrap: "wrap" }}>
+            <Search size={18} style={{ color: "var(--accent-text)", flexShrink: 0 }} />
             <input
               type="text"
               aria-label="Search query"
@@ -104,8 +104,9 @@ export function OverviewView({
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Ask anything across documents & code (e.g. 'Find Python functions that process CSV files')..."
+              style={{ minWidth: "min(100%, 160px)" }}
             />
-            <button type="submit" className="btn-primary" style={{ padding: "8px 18px" }} disabled={!searchInput.trim()}>
+            <button type="submit" className="btn-primary" style={{ padding: "8px 18px", flexShrink: 0 }} disabled={!searchInput.trim()}>
               <span>Search</span>
               <ArrowRight size={14} />
             </button>
@@ -202,7 +203,7 @@ export function OverviewView({
       </div>
 
       {/* Two Column Layout: System Architecture & Recent Search Activity */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: 20, marginBottom: 28 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: 20, marginBottom: 28 }}>
         {/* System Processing Pipeline Card */}
         <div className="surface-card">
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
@@ -249,15 +250,17 @@ export function OverviewView({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
+                  flexWrap: "wrap",
+                  gap: 8,
                   padding: "9px 12px",
                   background: "var(--bg-card-subtle)",
                   borderRadius: "var(--radius-sm)",
                   border: "1px solid var(--border-subtle)",
                 }}
               >
-                <div>
-                  <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text-main)" }}>{s.stage}</div>
-                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{s.desc}</div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text-main)", overflowWrap: "anywhere" }}>{s.stage}</div>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)", overflowWrap: "anywhere" }}>{s.desc}</div>
                 </div>
                 <span
                   style={{
@@ -336,16 +339,16 @@ export function OverviewView({
                   e.currentTarget.style.borderColor = "var(--border-subtle)";
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                  <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text-main)" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 6, marginBottom: 4 }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text-main)", overflowWrap: "anywhere" }}>
                     {entry.query}
                   </span>
                   <span className="badge badge-hybrid" style={{ fontSize: 10 }}>
                     {entry.mode}
                   </span>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 11, color: "var(--text-muted)" }}>
-                  <span>{entry.topResultTitle || "Search completed"}</span>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 6, fontSize: 11, color: "var(--text-muted)" }}>
+                  <span style={{ overflowWrap: "anywhere" }}>{entry.topResultTitle || "Search completed"}</span>
                   <span style={{ fontFamily: "var(--font-mono)" }}>
                     {entry.latencyMs} ms · {entry.resultsCount} hits
                   </span>
