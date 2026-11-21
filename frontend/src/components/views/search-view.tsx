@@ -28,7 +28,6 @@ import type {
 } from "@/types/search";
 import { sampleQueries } from "@/data/example-queries";
 import { extractHighlightTerms, highlightText } from "@/lib/highlight";
-import { yieldToMain } from "@/lib/scheduler";
 import type { ToastTone } from "../ui/toast";
 
 interface SearchViewProps {
