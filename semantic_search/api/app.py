@@ -36,15 +36,29 @@ app = FastAPI(
     description="Real compiler-assisted hybrid retrieval backend combining SQLite FTS5 and FAISS.",
 )
 
-_cors_origins = [
-    origin.strip().rstrip("/")
-    for origin in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
-    if origin.strip()
-]
+_cors_env = os.getenv("CORS_ORIGINS", "")
+if not _cors_env or _cors_env.strip() == "*":
+    _cors_origins = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+        "https://intelligent-query-analyzer-and-sear-one.vercel.app",
+    ]
+else:
+    _cors_origins = [
+        origin.strip().rstrip("/")
+        for origin in _cors_env.split(",")
+        if origin.strip()
+    ]
+    for dev_origin in ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3001"]:
+        if dev_origin not in _cors_origins:
+            _cors_origins.append(dev_origin)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
