@@ -22,6 +22,7 @@ from semantic_search.retrieval import (
     LocalSearchIndex,
     SentenceTransformerEmbedder,
 )
+from semantic_search.supabase_service import supabase_service
 
 DATA_DIR = Path(os.getenv("DATA_DIR", "data")).expanduser().resolve()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -165,6 +166,7 @@ def health_check():
         "embedding_model": "all-MiniLM-L6-v2",
         "fts_engine": "SQLite FTS5 BM25",
         "vector_engine": "FAISS IndexFlatIP (384-D)",
+        "supabase": supabase_service.test_connection(),
     }
 
 
@@ -409,6 +411,7 @@ def execute_search(req: SearchRequest):
 
     # Persist in real search history table
     top_title = formatted_results[0].title if formatted_results else "No matches"
+    hist_id = f"hist-{int(time.time() * 1000)}"
     conn = get_db_connection()
     try:
         conn.execute(
@@ -417,7 +420,7 @@ def execute_search(req: SearchRequest):
             VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
-                f"hist-{int(time.time() * 1000)}",
+                hist_id,
                 req.query,
                 req.mode,
                 len(formatted_results),
@@ -428,6 +431,20 @@ def execute_search(req: SearchRequest):
         conn.commit()
     finally:
         conn.close()
+
+    # Mirror search history to Supabase PostgreSQL if configured
+    if supabase_service.is_configured:
+        try:
+            supabase_service.record_search_history({
+                "id": hist_id,
+                "query": req.query,
+                "mode": req.mode,
+                "results_count": len(formatted_results),
+                "latency_ms": duration_ms,
+                "top_result": top_title,
+            })
+        except Exception as s_err:
+            print(f"Supabase history sync warning: {s_err}")
 
     # Re-use explain trace
     trace_obj = explain_query(ExplainRequest(query=req.query))
@@ -560,6 +577,24 @@ async def upload_files(files: List[UploadFile] = File(...)):
             finally:
                 conn.close()
 
+            # Mirror to Supabase Storage & PostgreSQL if configured
+            if supabase_service.is_configured:
+                try:
+                    with open(save_path, "rb") as f_bytes:
+                        supabase_service.upload_file_to_storage(file.filename, f_bytes.read())
+                    supabase_service.record_document({
+                        "id": file_id,
+                        "name": file.filename,
+                        "storage_path": f"{supabase_service.bucket}/{file.filename}",
+                        "file_type": f_type,
+                        "content_kind": c_kind,
+                        "file_size": file_size,
+                        "chunk_count": len(chunks),
+                        "status": "Indexed",
+                    })
+                except Exception as s_err:
+                    print(f"Supabase upload sync warning: {s_err}")
+
             uploaded_records.append(
                 {
                     "id": file_id,
@@ -592,6 +627,15 @@ def delete_file(file_id: str):
         conn.commit()
     finally:
         conn.close()
+
+    # Mirror deletion in Supabase if configured
+    if supabase_service.is_configured:
+        try:
+            supabase_service.delete_document(file_id)
+            if row:
+                supabase_service.delete_file_from_storage(Path(row["storage_path"]).name)
+        except Exception as s_err:
+            print(f"Supabase delete sync warning: {s_err}")
 
     # Rebuild in-memory FAISS vector index and purge chunks from SQLite FTS5 atomically
     _index.replace_file_chunks(storage_path, [], np.empty((0, 0), dtype=np.float32))
@@ -648,9 +692,16 @@ def clear_search_history():
     try:
         conn.execute("DELETE FROM search_history")
         conn.commit()
-        return {"cleared": True}
     finally:
         conn.close()
+
+    if supabase_service.is_configured:
+        try:
+            supabase_service.clear_search_history()
+        except Exception as s_err:
+            print(f"Supabase clear history sync warning: {s_err}")
+
+    return {"cleared": True}
 
 
 @app.get("/api/analytics")
