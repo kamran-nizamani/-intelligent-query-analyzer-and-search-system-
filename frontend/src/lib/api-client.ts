@@ -264,7 +264,7 @@ export class ApiClient {
   async listFiles(): Promise<IndexedFile[]> {
     if (isSupabaseConfigured()) {
       const supabase = getSupabaseClient();
-      if (!supabase) return [];
+      if (!supabase) throw new ApiError("Supabase client failed to initialize", null, true);
 
       interface DocumentRow {
         id: string;
@@ -429,7 +429,7 @@ export class ApiClient {
   async getHistory(): Promise<SearchHistoryEntry[]> {
     if (isSupabaseConfigured()) {
       const supabase = getSupabaseClient();
-      if (!supabase) return [];
+      if (!supabase) throw new ApiError("Supabase client failed to initialize", null, true);
 
       interface HistoryRow {
         id: string;
@@ -469,7 +469,7 @@ export class ApiClient {
   async clearHistory(): Promise<{ cleared: boolean }> {
     if (isSupabaseConfigured()) {
       const supabase = getSupabaseClient();
-      if (!supabase) return { cleared: false };
+      if (!supabase) throw new ApiError("Supabase client failed to initialize", null, true);
 
       const user = await this.ensureUserSession(supabase);
       if (user) {
