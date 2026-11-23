@@ -14,7 +14,7 @@ import {
 import type { AnalyticsResponse, HealthResponse } from "@/lib/api-client";
 
 interface AnalyticsViewProps {
-  /** `null` when Supabase has not answered. */
+  /** `null` when local database has not loaded. */
   metrics: AnalyticsResponse | null;
   health: HealthResponse | null;
 }
@@ -71,7 +71,7 @@ export function AnalyticsView({ metrics, health }: AnalyticsViewProps) {
           </div>
         </div>
         <p className="page-description">
-          Live usage figures computed from Supabase document, chunk, and search-history records.
+          Usage figures computed locally from IndexedDB documents, chunks, and search history.
         </p>
       </div>
 
@@ -79,7 +79,7 @@ export function AnalyticsView({ metrics, health }: AnalyticsViewProps) {
         <div role="alert" data-testid="analytics-unavailable" className="backend-banner" style={{ margin: "0 0 20px" }}>
           <AlertTriangle size={16} aria-hidden="true" style={{ flexShrink: 0 }} />
           <div>
-            <strong>Analytics unavailable.</strong> Supabase did not return metrics, so no figures are shown.
+            <strong>Analytics unavailable.</strong> Local analytics are unavailable until browser storage is ready.
           </div>
         </div>
       )}
@@ -102,7 +102,7 @@ export function AnalyticsView({ metrics, health }: AnalyticsViewProps) {
         <Metric
           label="Searchable chunks"
           value={metrics ? String(metrics.totalChunks) : dash}
-          note="In PostgreSQL full-text search + pgvector"
+          note="In-browser keyword + vector retrieval"
           icon={<Cpu size={16} aria-hidden="true" />}
           tint={{ bg: "rgba(16, 185, 129, 0.12)", fg: "#34d399" }}
         />
@@ -171,9 +171,9 @@ export function AnalyticsView({ metrics, health }: AnalyticsViewProps) {
               <dt>Status</dt>
               <dd style={{ color: "var(--success)" }}>● {health.status}</dd>
               <dt>Lexical engine</dt>
-              <dd>{health.fts_engine ?? "PostgreSQL full-text search"}</dd>
+              <dd>{health.fts_engine ?? "Local keyword search"}</dd>
               <dt>Vector engine</dt>
-              <dd>{health.vector_engine ?? "pgvector"}</dd>
+              <dd>{health.vector_engine ?? "Local cosine similarity"}</dd>
               <dt>Embedding model</dt>
               <dd>{health.embedding_model}</dd>
               <dt>Chunks indexed</dt>
@@ -182,7 +182,7 @@ export function AnalyticsView({ metrics, health }: AnalyticsViewProps) {
               <dd>Reciprocal Rank Fusion</dd>
             </dl>
           ) : (
-            <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Supabase health is unavailable.</p>
+            <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Local storage health is unavailable.</p>
           )}
         </div>
       </div>
