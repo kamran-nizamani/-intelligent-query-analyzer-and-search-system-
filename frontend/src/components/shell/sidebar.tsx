@@ -42,8 +42,8 @@ interface SidebarProps {
 
 const STATUS_LABEL = {
   checking: "Connecting…",
-  online: "Backend connected",
-  offline: "Backend offline",
+  online: "Supabase connected",
+  offline: "Supabase offline",
 } as const;
 
 export function Sidebar({
@@ -156,7 +156,7 @@ export function Sidebar({
                   <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-main)" }}>
                     {STATUS_LABEL[backendStatus]}
                   </span>
-                  <span style={{ fontSize: 10.5, color: "var(--text-muted)" }}>FTS5 + FAISS + MiniLM</span>
+                  <span style={{ fontSize: 10.5, color: "var(--text-muted)" }}>Postgres FTS + pgvector + MiniLM</span>
                 </div>
               </div>
               <Sparkles size={14} aria-hidden="true" style={{ color: "var(--accent-text)" }} />
