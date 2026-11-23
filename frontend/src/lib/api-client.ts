@@ -222,7 +222,7 @@ export class ApiClient {
 
       // Record to search_history in background
       if (user.id) {
-        void supabase.from("search_history").insert({
+        const { error: historyError } = await supabase.from("search_history").insert({
           user_id: user.id,
           query_text: query,
           mode: options.mode || "hybrid",
@@ -230,6 +230,9 @@ export class ApiClient {
           latency_ms: latencyMs,
           filters: plan.filters,
         });
+        if (historyError) {
+          throw new ApiError(`Search succeeded but history could not be saved: ${historyError.message}`);
+        }
       }
 
       return {
@@ -330,7 +333,7 @@ export class ApiClient {
             file_size: file.size,
             chunk_count: extracted.chunks.length,
             content_kind: extracted.contentKind,
-            status: "indexed",
+            status: "processing",
           })
           .select("id")
           .single();
@@ -369,6 +372,15 @@ export class ApiClient {
           if (chunkError) {
             throw new ApiError(`Chunk insertion failed: ${chunkError.message}`);
           }
+        }
+
+        const { error: statusError } = await supabase
+          .from("documents")
+          .update({ status: "indexed" })
+          .eq("id", docRecord.id)
+          .eq("user_id", user.id);
+        if (statusError) {
+          throw new ApiError(`Indexed chunks but could not update document status: ${statusError.message}`);
         }
 
         uploadedResults.push({ id: docRecord.id, name: file.name, chunks: chunkRows.length });
