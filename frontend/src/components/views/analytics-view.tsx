@@ -14,7 +14,7 @@ import {
 import type { AnalyticsResponse, HealthResponse } from "@/lib/api-client";
 
 interface AnalyticsViewProps {
-  /** `null` when the backend has not answered. */
+  /** `null` when Supabase has not answered. */
   metrics: AnalyticsResponse | null;
   health: HealthResponse | null;
 }
