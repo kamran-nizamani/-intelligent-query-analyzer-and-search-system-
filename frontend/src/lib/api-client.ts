@@ -1,541 +1,301 @@
-import type { User } from "@supabase/supabase-js";
 import type {
-  CompilerTrace,
-  IndexedFile,
-  SearchHistoryEntry,
-  SearchMode,
-  SearchResult,
-  SystemMetrics,
-  SourceKind,
-  SourceType,
+  CompilerTrace, IndexedFile, SearchHistoryEntry, SearchMode, SearchResult,
+  SystemMetrics, SourceKind, SourceType,
 } from "@/types/search";
-import { getSupabaseClient, isSupabaseConfigured } from "./supabase/client";
 import { compileQueryTrace } from "./compiler-engine";
 
-let anonymousSignInPromise: Promise<User> | null = null;
+const DB_NAME = "intelligent-query-analyzer";
+const DB_VERSION = 1;
+const STORES = ["documents", "chunks", "history"] as const;
+type StoreName = (typeof STORES)[number];
 
+type LocalDocument = {
+  id: string; file_name: string; file_type: string; content_kind: SourceKind;
+  file_size: number; chunk_count: number; created_at: string; raw_file: Blob;
+};
+type LocalChunk = {
+  id: string; document_id: string; file_name: string; file_type: string;
+  storage_path: string; source_kind: SourceKind; chunk_text: string;
+  page_number?: number; line_start?: number; line_end?: number;
+  symbol_name?: string; symbol_kind?: string; language?: string;
+  identifiers: string[]; embedding: number[];
+};
+type LocalHistory = {
+  id: string; query_text: string; mode: SearchMode; match_count: number;
+  latency_ms: number; filters: Record<string, string>; created_at: string;
+};
 
 export type HealthResponse = {
-  status: string;
-  database: string;
-  chunk_count: number;
-  embedding_model: string;
-  fts_engine?: string;
-  vector_engine?: string;
+  status: string; database: string; chunk_count: number;
+  embedding_model: string; fts_engine?: string; vector_engine?: string;
 };
-
-export type SearchOptions = {
-  mode?: SearchMode;
-  kind?: string;
-  type?: string;
-  limit?: number;
-};
-
-export type SearchResponse = {
-  results: SearchResult[];
-  latencyMs: number;
-  trace: CompilerTrace;
-  totalHits: number;
-};
-
-export type AnalyticsResponse = SystemMetrics & {
-  modeBreakdown?: Record<string, number>;
-};
+export type SearchOptions = { mode?: SearchMode; kind?: string; type?: string; limit?: number };
+export type SearchResponse = { results: SearchResult[]; latencyMs: number; trace: CompilerTrace; totalHits: number };
+export type AnalyticsResponse = SystemMetrics & { modeBreakdown?: Record<string, number> };
 
 export class ApiError extends Error {
   readonly status: number | null;
   readonly network: boolean;
-
   constructor(message: string, status: number | null = null, network = false) {
-    super(message);
-    this.name = "ApiError";
-    this.status = status;
-    this.network = network;
+    super(message); this.name = "ApiError"; this.status = status; this.network = network;
   }
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+function openDatabase(): Promise<IDBDatabase> {
+  if (typeof indexedDB === "undefined") return Promise.reject(new ApiError("IndexedDB is unavailable in this browser."));
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains("documents")) db.createObjectStore("documents", { keyPath: "id" });
+      if (!db.objectStoreNames.contains("chunks")) {
+        const store = db.createObjectStore("chunks", { keyPath: "id" });
+        store.createIndex("document_id", "document_id", { unique: false });
+      }
+      if (!db.objectStoreNames.contains("history")) db.createObjectStore("history", { keyPath: "id" });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error ?? new Error("Could not open local database."));
+    request.onblocked = () => reject(new Error("Close older Query Analyzer tabs to upgrade local storage."));
+  });
 }
 
-function mapSourceType(fileType: string): SourceType {
-  const upper = fileType.toUpperCase();
-  if (["PDF", "DOCX", "TXT", "PY", "JS", "JAVA"].includes(upper)) {
-    return upper as SourceType;
-  }
-  if (["TS", "TSX", "JSX"].includes(upper)) return "JS";
+async function all<T>(storeName: StoreName): Promise<T[]> {
+  const db = await openDatabase();
+  try {
+    return await new Promise((resolve, reject) => {
+      const request = db.transaction(storeName, "readonly").objectStore(storeName).getAll();
+      request.onsuccess = () => resolve(request.result as T[]);
+      request.onerror = () => reject(request.error);
+    });
+  } finally { db.close(); }
+}
+async function putMany<T>(storeName: StoreName, values: T[]): Promise<void> {
+  const db = await openDatabase();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(storeName, "readwrite");
+      values.forEach((value) => tx.objectStore(storeName).put(value));
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error ?? new Error("Local database transaction aborted."));
+    });
+  } finally { db.close(); }
+}
+async function remove(storeName: StoreName, key: string): Promise<void> {
+  const db = await openDatabase();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(storeName, "readwrite");
+      tx.objectStore(storeName).delete(key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } finally { db.close(); }
+}
+async function clear(storeName: StoreName): Promise<void> {
+  const db = await openDatabase();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(storeName, "readwrite");
+      tx.objectStore(storeName).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } finally { db.close(); }
+}
+function bytes(value: number): string {
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+function sourceType(ext: string): SourceType {
+  const value = ext.toUpperCase();
+  if (["PDF", "DOCX", "TXT", "PY", "JS", "JAVA"].includes(value)) return value as SourceType;
+  if (["TS", "TSX", "JSX"].includes(value)) return "JS";
   return "TXT";
+}
+function cosine(a: number[], b: number[]): number {
+  if (!a.length || a.length !== b.length) return 0;
+  let dot = 0, aa = 0, bb = 0;
+  for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; aa += a[i] * a[i]; bb += b[i] * b[i]; }
+  return aa && bb ? dot / Math.sqrt(aa * bb) : 0;
+}
+function lexicalScore(query: string, text: string): number {
+  const terms = Array.from(new Set(query.toLowerCase().match(/[a-z0-9_]+/g) ?? [])).filter((x) => x.length > 1);
+  if (!terms.length) return 0;
+  const haystack = text.toLowerCase();
+  let score = 0;
+  for (const term of terms) {
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const matches = haystack.match(new RegExp(escaped, "g"))?.length ?? 0;
+    if (matches) score += 1 + Math.log(1 + matches);
+  }
+  return score / Math.sqrt(Math.max(1, haystack.split(/\s+/).length));
 }
 
 export class ApiClient {
-  private async request<T>(): Promise<T> {
-    throw new ApiError(
-      "Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY in your Vercel project.",
-      null,
-      true
-    );
-  }
-
-  private async ensureUserSession(supabase: NonNullable<ReturnType<typeof getSupabaseClient>>) {
-    const { data: current, error: currentError } = await supabase.auth.getUser();
-    if (currentError) throw new ApiError(`Supabase authentication failed: ${currentError.message}`, 401);
-    if (current.user) return current.user;
-
-    if (!anonymousSignInPromise) {
-      anonymousSignInPromise = (async () => {
-        const { data, error } = await supabase.auth.signInAnonymously();
-        if (error || !data.user) {
-          throw new ApiError(
-            `Anonymous sign-in is required for this app. Enable Anonymous Sign-Ins in Supabase Authentication settings. ${error?.message || ""}`,
-            401
-          );
-        }
-        return data.user;
-      })().finally(() => {
-        anonymousSignInPromise = null;
-      });
-    }
-    return anonymousSignInPromise;
-  }
-
   async checkHealth(): Promise<HealthResponse> {
-    if (isSupabaseConfigured()) {
-      const supabase = getSupabaseClient();
-      if (!supabase) {
-        throw new ApiError("Supabase client failed to initialize", null, true);
-      }
-
-      await this.ensureUserSession(supabase);
-      const { count, error } = await supabase
-        .from("document_chunks")
-        .select("id", { count: "exact", head: true });
-
-      if (error) {
-        throw new ApiError(`Supabase connection error: ${error.message}`, 500, true);
-      }
-
-      return {
-        status: "healthy",
-        database: "Supabase PostgreSQL 15+ (pgvector)",
-        chunk_count: count ?? 0,
-        embedding_model: "Xenova/all-MiniLM-L6-v2 (Client ONNX 384-D)",
-        fts_engine: "PostgreSQL full-text search (GIN)",
-        vector_engine: "pgvector HNSW (cosine distance)",
-      };
-    }
-
-    return this.request<HealthResponse>();
+    const [documents, chunks] = await Promise.all([all<LocalDocument>("documents"), all<LocalChunk>("chunks")]);
+    return {
+      status: "healthy", database: "Browser IndexedDB (offline-first)",
+      chunk_count: chunks.length, embedding_model: "Xenova/all-MiniLM-L6-v2 (local ONNX)",
+      fts_engine: "Local keyword index", vector_engine: "Local cosine similarity",
+    };
   }
 
-  async search(query: string, options: SearchOptions = {}): Promise<SearchResponse> {
-    if (isSupabaseConfigured()) {
-      const supabase = getSupabaseClient();
-      if (!supabase) {
-        throw new ApiError("Supabase client not initialized", null, true);
+  explain(query: string): Promise<CompilerTrace> { return Promise.resolve(compileQueryTrace(query)); }
+
+  async uploadFiles(files: File[]): Promise<{ uploaded: unknown[]; totalFilesIndexed: number }> {
+    const { extractFileInBrowser } = await import("./extractors/client-extractors");
+    const { embedBatch } = await import("./embeddings/web-embedder");
+    const uploaded: { id: string; name: string; chunks: number }[] = [];
+    for (const file of files) {
+      const extracted = await extractFileInBrowser(file);
+      if (!extracted.rawText.trim() || extracted.chunks.length === 0) {
+        throw new ApiError(`No searchable text could be extracted from ${file.name}. For scanned PDFs, run OCR first.`);
       }
-
-      const user = await this.ensureUserSession(supabase);
-      const t0 = performance.now();
-      const trace = compileQueryTrace(query);
-      const plan = trace.optimizedIr;
-
-      const embedding = options.mode === "lexical"
-        ? null
-        : await (await import("./embeddings/web-embedder")).embedText(plan.semanticQuery || query);
-
-      interface SupabaseChunkRow {
-        chunk_id: string;
-        document_id: string;
-        file_name: string;
-        storage_path: string;
-        file_type: string;
-        source_kind: SourceKind;
-        chunk_text: string;
-        page_number?: number;
-        line_start?: number;
-        line_end?: number;
-        symbol_name?: string;
-        symbol_kind?: string;
-        language?: string;
-        identifiers?: string[];
-        lexical_rank?: number;
-        vector_rank?: number;
-        rrf_score: number;
-      }
-
-      const { data, error } = await supabase.rpc("hybrid_search_rrf", {
-        query_text: plan.lexicalQuery || query,
-        query_embedding: embedding,
-        match_limit: options.limit || plan.limit || 10,
-        filter_kind: options.kind && options.kind !== "all" ? options.kind : (plan.filters.content_kind as string) || null,
-        filter_language: (plan.filters.language as string) || null,
-        filter_symbol: (plan.filters.symbol_kind as string) || null,
-        rrf_k: 60,
-        search_mode: options.mode || "hybrid",
-      });
-
-      if (error) {
-        throw new ApiError(`Search query execution failed: ${error.message}`, 500);
-      }
-
-      const rows = (data || []) as SupabaseChunkRow[];
-      const latencyMs = +(performance.now() - t0).toFixed(1);
-
-      const results: SearchResult[] = rows.map((row) => {
-        const title = row.symbol_name || row.file_name;
-        const location =
-          row.source_kind === "code" && row.line_start && row.line_end
-            ? `Lines ${row.line_start}–${row.line_end}${row.symbol_name ? ` · ${row.symbol_kind || "Symbol"} \`${row.symbol_name}\`` : ""}`
-            : row.page_number
-            ? `Page ${row.page_number}`
-            : "Section";
-
-        const tags: string[] = [];
-        if (row.language) tags.push(row.language);
-        if (row.symbol_kind) tags.push(row.symbol_kind);
-        if (row.identifiers && row.identifiers.length > 0) {
-          tags.push(...row.identifiers.slice(0, 3));
-        }
-
-        let matchType: "hybrid" | "semantic" | "lexical" = "hybrid";
-        if (row.lexical_rank && !row.vector_rank) matchType = "lexical";
-        else if (!row.lexical_rank && row.vector_rank) matchType = "semantic";
-
-        const description =
-          row.lexical_rank && row.vector_rank
-            ? `Lexical rank #${row.lexical_rank} · Vector rank #${row.vector_rank}`
-            : row.lexical_rank
-            ? `Lexical rank #${row.lexical_rank}`
-            : `Vector rank #${row.vector_rank}`;
-
-        return {
-          id: `chunk-${row.chunk_id}`,
-          title,
-          path: row.storage_path || row.file_name,
-          kind: row.source_kind || "document",
-          type: mapSourceType(row.file_type),
-          description,
-          preview: row.chunk_text,
-          location,
-          language: row.language,
-          symbol: row.symbol_name,
-          score: +row.rrf_score.toFixed(4),
-          lexicalRank: row.lexical_rank,
-          semanticRank: row.vector_rank,
-          matchType,
-          updated: "Indexed",
-          tags,
-        };
-      });
-
-      // Record to search_history in background
-      if (user.id) {
-        const { error: historyError } = await supabase.from("search_history").insert({
-          user_id: user.id,
-          query_text: query,
-          mode: options.mode || "hybrid",
-          match_count: results.length,
-          latency_ms: latencyMs,
-          filters: plan.filters,
-        });
-        if (historyError) {
-          throw new ApiError(`Search succeeded but history could not be saved: ${historyError.message}`);
-        }
-      }
-
-      return {
-        results,
-        latencyMs,
-        trace,
-        totalHits: results.length,
+      const vectors = await embedBatch(extracted.chunks.map((chunk) => chunk.chunkText));
+      const id = crypto.randomUUID();
+      const createdAt = new Date().toISOString();
+      const document: LocalDocument = {
+        id, file_name: file.name, file_type: extracted.fileType,
+        content_kind: extracted.contentKind, file_size: file.size,
+        chunk_count: extracted.chunks.length, created_at: createdAt, raw_file: file,
       };
+      const chunks: LocalChunk[] = extracted.chunks.map((chunk, index) => ({
+        id: `${id}:${index}`, document_id: id, file_name: file.name,
+        file_type: extracted.fileType, storage_path: file.name,
+        source_kind: chunk.sourceKind, chunk_text: chunk.chunkText,
+        page_number: chunk.pageNumber, line_start: chunk.lineStart, line_end: chunk.lineEnd,
+        symbol_name: chunk.symbolName, symbol_kind: chunk.symbolKind,
+        language: chunk.language, identifiers: chunk.identifiers ?? [], embedding: vectors[index],
+      }));
+      await putMany("documents", [document]);
+      await putMany("chunks", chunks);
+      uploaded.push({ id, name: file.name, chunks: chunks.length });
     }
-
-    return this.request<SearchResponse>();
-  }
-
-  explain(query: string): Promise<CompilerTrace> {
-    // The TypeScript compiler runs locally; no API server is required.
-    return Promise.resolve(compileQueryTrace(query));
+    return { uploaded, totalFilesIndexed: uploaded.length };
   }
 
   async listFiles(): Promise<IndexedFile[]> {
-    if (isSupabaseConfigured()) {
-      const supabase = getSupabaseClient();
-      if (!supabase) throw new ApiError("Supabase client failed to initialize", null, true);
-
-      interface DocumentRow {
-        id: string;
-        file_name: string;
-        storage_path: string;
-        file_type: string;
-        content_kind: SourceKind;
-        file_size: number;
-        chunk_count: number;
-        status: string;
-        created_at: string;
-      }
-
-      await this.ensureUserSession(supabase);
-      const { data, error } = await supabase
-        .from("documents")
-        .select("id, file_name, storage_path, file_type, content_kind, file_size, chunk_count, status, created_at")
-        .order("created_at", { ascending: false });
-
-      if (error) throw new ApiError(`Failed to list indexed files: ${error.message}`);
-      if (!data) return [];
-
-      return (data as DocumentRow[]).map((d) => ({
-        id: d.id,
-        name: d.file_name,
-        path: d.storage_path,
-        kind: d.content_kind || "document",
-        type: mapSourceType(d.file_type),
-        size: formatBytes(d.file_size || 0),
-        rawSize: d.file_size || 0,
-        chunks: d.chunk_count || 0,
-        status: "Indexed",
-        updated: new Date(d.created_at).toLocaleDateString(),
-      }));
-    }
-
-    return this.request<IndexedFile[]>();
-  }
-
-  async uploadFiles(files: File[]): Promise<{ uploaded: unknown[]; totalFilesIndexed: number }> {
-    if (isSupabaseConfigured()) {
-      const supabase = getSupabaseClient();
-      if (!supabase) {
-        throw new ApiError("Supabase client not initialized", null, true);
-      }
-
-      const user = await this.ensureUserSession(supabase);
-
-      const { extractFileInBrowser } = await import("./extractors/client-extractors");
-      const { embedBatch } = await import("./embeddings/web-embedder");
-
-      const uploadedResults = [];
-
-      for (const file of files) {
-        // 1. Extract file in browser
-        const extracted = await extractFileInBrowser(file);
-
-        // 2. Upload file to Supabase Storage
-        const storagePath = `${user.id}/${Date.now()}_${file.name}`;
-        const { error: storageError } = await supabase.storage
-          .from("documents")
-          .upload(storagePath, file, { upsert: true });
-
-        if (storageError) {
-          throw new ApiError(`Storage upload failed: ${storageError.message}`);
-        }
-
-        // 3. Insert document record
-        const { data: docRecord, error: docError } = await supabase
-          .from("documents")
-          .insert({
-            user_id: user.id,
-            file_name: file.name,
-            storage_path: storagePath,
-            file_type: extracted.fileType,
-            file_size: file.size,
-            chunk_count: extracted.chunks.length,
-            content_kind: extracted.contentKind,
-            status: "processing",
-          })
-          .select("id")
-          .single();
-
-        if (docError || !docRecord) {
-          throw new ApiError(`Document database record creation failed: ${docError?.message}`);
-        }
-
-        // 4. Compute embeddings for chunks
-        const chunkTexts = extracted.chunks.map((c) => c.chunkText);
-        const embeddings = await embedBatch(chunkTexts);
-
-        // 5. Bulk insert document chunks
-        const chunkRows = extracted.chunks.map((chunk, idx) => ({
-          document_id: docRecord.id,
-          user_id: user.id,
-          chunk_index: idx,
-          chunk_text: chunk.chunkText,
-          file_path: storagePath,
-          source_kind: chunk.sourceKind,
-          page_number: chunk.pageNumber ?? null,
-          line_start: chunk.lineStart ?? null,
-          line_end: chunk.lineEnd ?? null,
-          symbol_name: chunk.symbolName ?? null,
-          symbol_kind: chunk.symbolKind ?? null,
-          language: chunk.language ?? null,
-          identifiers: chunk.identifiers ?? [],
-          embedding: embeddings[idx],
-        }));
-
-        if (chunkRows.length > 0) {
-          const { error: chunkError } = await supabase
-            .from("document_chunks")
-            .insert(chunkRows);
-
-          if (chunkError) {
-            throw new ApiError(`Chunk insertion failed: ${chunkError.message}`);
-          }
-        }
-
-        const { error: statusError } = await supabase
-          .from("documents")
-          .update({ status: "indexed" })
-          .eq("id", docRecord.id)
-          .eq("user_id", user.id);
-        if (statusError) {
-          throw new ApiError(`Indexed chunks but could not update document status: ${statusError.message}`);
-        }
-
-        uploadedResults.push({ id: docRecord.id, name: file.name, chunks: chunkRows.length });
-      }
-
-      return { uploaded: uploadedResults, totalFilesIndexed: uploadedResults.length };
-    }
-
-    return this.request();
+    const docs = (await all<LocalDocument>("documents")).sort((a, b) => b.created_at.localeCompare(a.created_at));
+    return docs.map((doc) => ({
+      id: doc.id, name: doc.file_name, path: doc.file_name,
+      kind: doc.content_kind, type: sourceType(doc.file_type), size: bytes(doc.file_size),
+      rawSize: doc.file_size, chunks: doc.chunk_count, status: "Indexed",
+      updated: new Date(doc.created_at).toLocaleDateString(),
+      contentPreview: "",
+    }));
   }
 
   async deleteFile(fileId: string): Promise<{ deleted: string; status: string }> {
-    if (isSupabaseConfigured()) {
-      const supabase = getSupabaseClient();
-      if (!supabase) {
-        throw new ApiError("Supabase client not initialized", null, true);
-      }
+    const db = await openDatabase();
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(["documents", "chunks"], "readwrite");
+        tx.objectStore("documents").delete(fileId);
+        const index = tx.objectStore("chunks").index("document_id");
+        const request = index.openCursor(IDBKeyRange.only(fileId));
+        request.onsuccess = () => {
+          const cursor = request.result;
+          if (cursor) { cursor.delete(); cursor.continue(); }
+        };
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    } finally { db.close(); }
+    return { deleted: fileId, status: "success" };
+  }
 
-      await this.ensureUserSession(supabase);
-      const { data: document, error: lookupError } = await supabase
-        .from("documents").select("storage_path").eq("id", fileId).single();
-      if (lookupError) throw new ApiError(`Failed to find document: ${lookupError.message}`);
-      const { error: storageError } = await supabase.storage.from("documents").remove([document.storage_path]);
-      if (storageError) throw new ApiError(`Failed to remove stored file: ${storageError.message}`);
-      const { error } = await supabase.from("documents").delete().eq("id", fileId);
-      if (error) {
-        throw new ApiError(`Failed to delete document: ${error.message}`);
-      }
-
-      return { deleted: fileId, status: "success" };
+  async search(query: string, options: SearchOptions = {}): Promise<SearchResponse> {
+    const t0 = performance.now();
+    const trace = compileQueryTrace(query);
+    const plan = trace.optimizedIr;
+    const mode = options.mode ?? "hybrid";
+    const chunks = await all<LocalChunk>("chunks");
+    let queryVector: number[] | null = null;
+    if (mode !== "lexical" && chunks.length) {
+      const { embedText } = await import("./embeddings/web-embedder");
+      queryVector = await embedText(plan.semanticQuery || query);
     }
-
-    return this.request();
+    const candidates = chunks.filter((chunk) => {
+      if (options.kind && options.kind !== "all" && chunk.source_kind !== options.kind) return false;
+      if (plan.filters.language && chunk.language !== plan.filters.language) return false;
+      if (plan.filters.symbol_kind && chunk.symbol_kind !== plan.filters.symbol_kind) return false;
+      return true;
+    }).map((chunk) => {
+      const lexical = lexicalScore(plan.lexicalQuery || query, chunk.chunk_text);
+      const semantic = queryVector ? Math.max(0, cosine(queryVector, chunk.embedding)) : 0;
+      return { chunk, lexical, semantic };
+    });
+    const lexicalRanked = [...candidates].filter((x) => x.lexical > 0).sort((a,b) => b.lexical-a.lexical);
+    const semanticRanked = [...candidates].filter((x) => x.semantic > 0).sort((a,b) => b.semantic-a.semantic);
+    const lexRanks = new Map(lexicalRanked.map((x,i) => [x.chunk.id, i+1]));
+    const semRanks = new Map(semanticRanked.map((x,i) => [x.chunk.id, i+1]));
+    const ranked = candidates.map((x) => {
+      const lr = lexRanks.get(x.chunk.id), sr = semRanks.get(x.chunk.id);
+      const score = mode === "lexical" ? x.lexical
+        : mode === "semantic" ? x.semantic
+        : (lr ? 1/(60+lr) : 0) + (sr ? 1/(60+sr) : 0);
+      return { ...x, lr, sr, score };
+    }).filter((x) => x.score > 0).sort((a,b) => b.score-a.score).slice(0, options.limit ?? plan.limit ?? 10);
+    const results: SearchResult[] = ranked.map(({chunk, lexical, semantic, lr, sr, score}) => {
+      const matchType = lr && sr ? "hybrid" : lr ? "lexical" : "semantic";
+      const tags = [chunk.language, chunk.symbol_kind, ...chunk.identifiers.slice(0,3)].filter(Boolean) as string[];
+      return {
+        id: chunk.id, title: chunk.symbol_name || chunk.file_name,
+        path: chunk.storage_path, kind: chunk.source_kind, type: sourceType(chunk.file_type),
+        description: lr && sr ? `Keyword #${lr} · Semantic #${sr}` : lr ? `Keyword rank #${lr}` : `Semantic rank #${sr}`,
+        preview: chunk.chunk_text,
+        location: chunk.source_kind === "code" && chunk.line_start && chunk.line_end
+          ? `Lines ${chunk.line_start}–${chunk.line_end}`
+          : chunk.page_number ? `Page ${chunk.page_number}` : "Section",
+        language: chunk.language, symbol: chunk.symbol_name,
+        score: Number(score.toFixed(6)), lexicalRank: lr, semanticRank: sr,
+        matchType, updated: "Indexed", tags,
+      };
+    });
+    const latencyMs = Number((performance.now()-t0).toFixed(1));
+    const history: LocalHistory = {
+      id: crypto.randomUUID(), query_text: query, mode, match_count: results.length,
+      latency_ms: latencyMs, filters: plan.filters, created_at: new Date().toISOString(),
+    };
+    await putMany("history", [history]);
+    return { results, latencyMs, trace, totalHits: results.length };
   }
 
   async getHistory(): Promise<SearchHistoryEntry[]> {
-    if (isSupabaseConfigured()) {
-      const supabase = getSupabaseClient();
-      if (!supabase) throw new ApiError("Supabase client failed to initialize", null, true);
-
-      interface HistoryRow {
-        id: string;
-        query_text: string;
-        mode: SearchMode;
-        match_count: number;
-        latency_ms: number;
-        filters: Record<string, string>;
-        created_at: string;
-      }
-
-      await this.ensureUserSession(supabase);
-      const { data, error } = await supabase
-        .from("search_history")
-        .select("id, query_text, mode, match_count, latency_ms, filters, created_at")
-        .order("created_at", { ascending: false })
-        .limit(50);
-
-      if (error) throw new ApiError(`Failed to fetch search history: ${error.message}`);
-      if (!data) return [];
-
-      return (data as HistoryRow[]).map((row) => ({
-        id: row.id,
-        query: row.query_text,
-        timestamp: new Date(row.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        date: new Date(row.created_at).toLocaleDateString(),
-        mode: row.mode || "hybrid",
-        resultsCount: row.match_count || 0,
-        latencyMs: +row.latency_ms.toFixed(1),
-        filtersApplied: row.filters,
-      }));
-    }
-
-    return this.request<SearchHistoryEntry[]>();
+    const rows = (await all<LocalHistory>("history")).sort((a,b) => b.created_at.localeCompare(a.created_at)).slice(0,50);
+    return rows.map((row) => {
+      const date = new Date(row.created_at);
+      return {
+        id: row.id, query: row.query_text,
+        timestamp: date.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"}),
+        date: date.toLocaleDateString(), mode: row.mode, resultsCount: row.match_count,
+        latencyMs: row.latency_ms, filtersApplied: row.filters,
+      };
+    });
   }
 
-  async clearHistory(): Promise<{ cleared: boolean }> {
-    if (isSupabaseConfigured()) {
-      const supabase = getSupabaseClient();
-      if (!supabase) throw new ApiError("Supabase client failed to initialize", null, true);
-
-      const user = await this.ensureUserSession(supabase);
-      if (user) {
-        const { error } = await supabase.from("search_history").delete().eq("user_id", user.id);
-        if (error) throw new ApiError(`Failed to clear search history: ${error.message}`);
-      }
-      return { cleared: true };
-    }
-
-    return this.request();
-  }
+  async clearHistory(): Promise<{ cleared: boolean }> { await clear("history"); return { cleared: true }; }
 
   async getAnalytics(): Promise<AnalyticsResponse> {
-    if (isSupabaseConfigured()) {
-      const supabase = getSupabaseClient();
-      if (!supabase) {
-        throw new ApiError("Supabase not initialized", null, true);
-      }
-
-      await this.ensureUserSession(supabase);
-      const [docsRes, chunksRes, histRes] = await Promise.all([
-        supabase.from("documents").select("content_kind"),
-        supabase.from("document_chunks").select("id", { count: "exact", head: true }),
-        supabase.from("search_history").select("latency_ms, mode"),
-      ]);
-
-      if (docsRes.error || chunksRes.error || histRes.error) {
-        throw new ApiError(`Analytics query failed: ${docsRes.error?.message || chunksRes.error?.message || histRes.error?.message}`);
-      }
-      const docs = (docsRes.data || []) as { content_kind?: string }[];
-      const totalDocuments = docs.filter((d) => d.content_kind === "document").length;
-      const totalCodeFiles = docs.filter((d) => d.content_kind === "code").length;
-      const totalChunks = chunksRes.count ?? 0;
-
-      const historyData = (histRes.data || []) as { latency_ms?: number; mode?: string }[];
-      const totalSearches = historyData.length;
-      const avgLatencyMs =
-        totalSearches > 0
-          ? +(historyData.reduce((acc, h) => acc + (h.latency_ms || 0), 0) / totalSearches).toFixed(1)
-          : 0;
-
-      const modeBreakdown: Record<string, number> = { hybrid: 0, semantic: 0, lexical: 0 };
-      for (const h of historyData) {
-        const m = h.mode || "hybrid";
-        modeBreakdown[m] = (modeBreakdown[m] || 0) + 1;
-      }
-
-      return {
-        totalDocuments,
-        totalCodeFiles,
-        totalChunks,
-        totalSearches,
-        avgLatencyMs,
-        ftsStatus: "Online",
-        faissStatus: "Online",
-        embeddingModel: "Xenova/all-MiniLM-L6-v2 (Client ONNX 384-D)",
-        precisionAt1: 0,
-        precisionAt5: 0,
-        recallAt5: 0,
-        mrrScore: 0,
-        modeBreakdown,
-      };
-    }
-
-    return this.request<AnalyticsResponse>();
+    const [docs, chunks, history] = await Promise.all([
+      all<LocalDocument>("documents"), all<LocalChunk>("chunks"), all<LocalHistory>("history"),
+    ]);
+    const modeBreakdown: Record<string, number> = { hybrid: 0, semantic: 0, lexical: 0 };
+    history.forEach((entry) => { modeBreakdown[entry.mode] = (modeBreakdown[entry.mode] ?? 0) + 1; });
+    const totalSearches = history.length;
+    return {
+      totalDocuments: docs.filter((d) => d.content_kind === "document").length,
+      totalCodeFiles: docs.filter((d) => d.content_kind === "code").length,
+      totalChunks: chunks.length, totalSearches,
+      avgLatencyMs: totalSearches ? Number((history.reduce((sum,h)=>sum+h.latency_ms,0)/totalSearches).toFixed(1)) : 0,
+      ftsStatus: "Online", faissStatus: "Online",
+      embeddingModel: "Xenova/all-MiniLM-L6-v2 (local ONNX 384-D)",
+      precisionAt1: 0, precisionAt5: 0, recallAt5: 0, mrrScore: 0, modeBreakdown,
+    };
   }
 }
-
 export const apiClient = new ApiClient();

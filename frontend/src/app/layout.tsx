@@ -3,18 +3,20 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Intelligent Query Analyzer & Search System",
-  description:
-    "Production-grade compiler-assisted hybrid information retrieval platform across documents and source-code repositories.",
+  description: "Offline-first compiler-assisted hybrid information retrieval for documents and source code.",
+  manifest: "/manifest.webmanifest",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+function OfflineServiceWorker() {
   return (
-    <html lang="en" data-theme="dark">
-      <body>{children}</body>
-    </html>
+    <script
+      dangerouslySetInnerHTML={{
+        __html: `if ("serviceWorker" in navigator) { window.addEventListener("load", () => { navigator.serviceWorker.register("/sw.js").catch((error) => console.warn("Offline support could not be registered:", error)); }); }`,
+      }}
+    />
   );
+}
+
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  return <html lang="en" data-theme="dark"><body>{children}<OfflineServiceWorker /></body></html>;
 }
