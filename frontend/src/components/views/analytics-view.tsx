@@ -187,7 +187,7 @@ export function AnalyticsView({ metrics, health }: AnalyticsViewProps) {
         </div>
       </div>
 
-      {/* Honest placeholder: the backend returns constants for these, so they are not displayed. */}
+      {/* Honest placeholder: retrieval quality is not measured without labelled evaluation data. */}
       <div className="surface-card" data-testid="quality-not-measured">
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
           <Info size={16} aria-hidden="true" style={{ color: "var(--info)" }} />
