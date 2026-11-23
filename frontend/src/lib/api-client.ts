@@ -51,15 +51,6 @@ export class ApiError extends Error {
   }
 }
 
-function describeDetail(detail: unknown, fallback: string): string {
-  if (typeof detail === "string" && detail) return detail;
-  if (Array.isArray(detail) && detail.length > 0) {
-    const first = detail[0] as { msg?: string };
-    if (first?.msg) return first.msg;
-  }
-  return fallback;
-}
-
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -125,7 +116,7 @@ export class ApiClient {
       };
     }
 
-    return this.request<HealthResponse>("/api/health", {}, "Backend server unhealthy", 5_000);
+    return this.request<HealthResponse>();
   }
 
   async search(query: string, options: SearchOptions = {}): Promise<SearchResponse> {
@@ -143,7 +134,7 @@ export class ApiClient {
       const embedding = await embedText(plan.semanticQuery || query);
 
       interface SupabaseChunkRow {
-        chunk_id: number;
+        chunk_id: string;
         document_id: string;
         file_name: string;
         storage_path: string;
@@ -426,6 +417,7 @@ export class ApiClient {
         created_at: string;
       }
 
+      await this.ensureUserSession(supabase);
       const { data, error } = await supabase
         .from("search_history")
         .select("id, query_text, mode, match_count, latency_ms, filters, created_at")
