@@ -8,7 +8,7 @@ import type {
   SourceKind,
   SourceType,
 } from "@/types/search";
-import { getSupabaseClient, isSupabaseConfigured } from "./supabase/client";
+import { ensureSupabaseSession, getSupabaseClient, isSupabaseConfigured } from "./supabase/client";
 import { compileQueryTrace } from "./compiler-engine";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
@@ -118,6 +118,7 @@ export class ApiClient {
 
   async checkHealth(): Promise<HealthResponse> {
     if (isSupabaseConfigured()) {
+      await ensureSupabaseSession();
       const supabase = getSupabaseClient();
       if (!supabase) {
         throw new ApiError("Supabase client failed to initialize", null, true);
@@ -146,6 +147,7 @@ export class ApiClient {
 
   async search(query: string, options: SearchOptions = {}): Promise<SearchResponse> {
     if (isSupabaseConfigured()) {
+      await ensureSupabaseSession();
       const supabase = getSupabaseClient();
       if (!supabase) {
         throw new ApiError("Supabase client not initialized", null, true);
@@ -300,6 +302,7 @@ export class ApiClient {
 
   async listFiles(): Promise<IndexedFile[]> {
     if (isSupabaseConfigured()) {
+      await ensureSupabaseSession();
       const supabase = getSupabaseClient();
       if (!supabase) return [];
 
@@ -343,6 +346,7 @@ export class ApiClient {
 
   async uploadFiles(files: File[]): Promise<{ uploaded: unknown[]; totalFilesIndexed: number }> {
     if (isSupabaseConfigured()) {
+      await ensureSupabaseSession();
       const supabase = getSupabaseClient();
       if (!supabase) {
         throw new ApiError("Supabase client not initialized", null, true);
@@ -440,6 +444,7 @@ export class ApiClient {
 
   async deleteFile(fileId: string): Promise<{ deleted: string; status: string }> {
     if (isSupabaseConfigured()) {
+      await ensureSupabaseSession();
       const supabase = getSupabaseClient();
       if (!supabase) {
         throw new ApiError("Supabase client not initialized", null, true);
@@ -462,6 +467,7 @@ export class ApiClient {
 
   async getHistory(): Promise<SearchHistoryEntry[]> {
     if (isSupabaseConfigured()) {
+      await ensureSupabaseSession();
       const supabase = getSupabaseClient();
       if (!supabase) return [];
 
@@ -500,6 +506,7 @@ export class ApiClient {
 
   async clearHistory(): Promise<{ cleared: boolean }> {
     if (isSupabaseConfigured()) {
+      await ensureSupabaseSession();
       const supabase = getSupabaseClient();
       if (!supabase) return { cleared: false };
 
@@ -515,6 +522,7 @@ export class ApiClient {
 
   async getAnalytics(): Promise<AnalyticsResponse> {
     if (isSupabaseConfigured()) {
+      await ensureSupabaseSession();
       const supabase = getSupabaseClient();
       if (!supabase) {
         throw new ApiError("Supabase not initialized", null, true);
