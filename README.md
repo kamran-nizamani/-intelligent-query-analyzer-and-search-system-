@@ -1,157 +1,72 @@
 # Intelligent Query Analyzer and Search System
 
-A local-first search application that turns natural-language-style queries into
-a structured search plan, indexes documents and source code, and combines
-keyword and semantic retrieval. The project includes a Python compiler and
-retrieval backend, a FastAPI service, and a Next.js web interface.
+A compiler-assisted document and source-code search workspace. The production web application runs on **Vercel + Supabase** with no FastAPI service.
 
-## Objectives and key features
+## Features
 
-- Parse supported search phrases into tokens, an AST, validated semantics, and
-  an optimized intermediate representation.
-- Extract and chunk PDF, DOCX, and TXT documents, plus Python, Java, JavaScript,
-  and JSX source files while retaining useful source locations and identifiers.
-- Search indexed content using SQLite FTS5/BM25 and FAISS vector similarity,
-  combined with Reciprocal Rank Fusion (RRF).
-- Provide a command-line interface for indexing files, inspecting compiled
-  queries, and searching the local index.
-- Provide a web workspace for search, query analysis, document management,
-  search history, analytics, and settings. The frontend calls the local API and
-  clearly indicates when it is unavailable.
+- Seven-stage TypeScript query compiler: lexer, parser, AST, semantic checks, IR, optimization, and retrieval planning.
+- Browser-side extraction and chunking for PDF, DOCX, TXT, Python, Java, JavaScript, and related source files.
+- Browser-side 384-dimensional MiniLM embeddings using Transformers.js.
+- PostgreSQL full-text search and pgvector semantic retrieval, combined with Reciprocal Rank Fusion (RRF).
+- Private document storage, per-user document/chunk records, search history, and usage analytics.
+- Local Python CLI and retrieval implementation remain available for offline experimentation; they are not part of the deployed web runtime.
 
-The query compiler intentionally supports a limited search vocabulary; it is
-not a general-purpose natural-language parser. The web query analyzer can use
-a labelled local TypeScript approximation when the API is offline, but search
-and document operations require the backend.
-
-## Technologies
-
-| Area | Technologies |
-|---|---|
-| Backend | Python, FastAPI, Pydantic, Uvicorn |
-| Query compiler | Python lexer, parser, AST, semantic validation, IR, optimizer |
-| Document and code processing | PyMuPDF, python-docx, Tree-sitter, Python `ast` |
-| Retrieval and storage | SQLite FTS5/BM25, FAISS CPU, Sentence Transformers (`all-MiniLM-L6-v2`), NumPy, RRF |
-| Frontend | Next.js 15, React 19, TypeScript |
-| Frontend tests | Vitest, Testing Library, Playwright, axe-core |
-| Backend tests | Python `unittest` |
-
-Python dependencies are listed in [requirements.txt](./requirements.txt);
-frontend dependencies and scripts are in [frontend/package.json](./frontend/package.json).
-
-## Architecture
+## Production architecture
 
 ```text
-Browser (Next.js / React)
-        │ HTTP
-        ▼
-FastAPI service ─────── CLI
-        │                 │
-        ├── Query compiler: lexer → parser/AST → semantic analysis → IR → optimizer
-        ├── File processing: document/code extraction → source-aware chunks
-        └── Hybrid retrieval
-              ├── SQLite FTS5/BM25 lexical search and metadata
-              ├── Sentence Transformer embeddings + FAISS vector search
-              └── Reciprocal Rank Fusion → ranked, source-aware results
+Browser / Next.js (Vercel)
+  ├── TypeScript query compiler
+  ├── Document extraction + chunking
+  ├── MiniLM embeddings (Transformers.js)
+  └── Supabase JS client
+        ├── Supabase Auth (anonymous sessions)
+        ├── Storage (private documents bucket)
+        └── PostgreSQL
+              ├── documents + document_chunks
+              ├── PostgreSQL full-text search
+              ├── pgvector HNSW
+              ├── hybrid_search_rrf() RPC
+              └── search_history
 ```
 
-The API and CLI share the compiler, processing pipeline, and local retrieval
-implementation. Runtime database files and uploaded documents are stored under
-`data/` and are intentionally not committed.
+## Supabase configuration
 
-## Project layout
+Configure these Vercel environment variables in Production, Preview, and Development:
 
-```text
-semantic_search/
-  compiler/       Query lexer, parser, AST, semantic checks, IR, optimizer
-  processing/     Document/code extraction and chunking
-  retrieval/      SQLite/FAISS indexes, embeddings, hybrid search and RRF
-  api/            FastAPI application and seed utilities
-  cli.py          Index, explain, and search commands
-frontend/
-  src/            Next.js application, views, components, API client
-  tests/          Vitest component/unit tests and Playwright E2E tests
-tests/
-  fixtures/       Small test documents and source-code fixtures
-  test_*.py       Compiler, processing, retrieval, and integration tests
-```
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 
-## Requirements and setup
+Enable Anonymous Sign-Ins in Supabase Authentication settings. The application creates a separate anonymous session per browser; Row Level Security scopes documents, chunks, history, and Storage objects to that user. Never expose a service-role or secret key in browser code.
 
-- Python 3.10 or later
-- Node.js and npm (use a Node.js release supported by Next.js 15)
-- Internet access on first semantic search to download the
-  `sentence-transformers/all-MiniLM-L6-v2` model; the model is cached by
-  Sentence Transformers and is not included in this repository
+Database schema and RLS are defined in `supabase/migrations`.
 
-From the project root, create and activate a virtual environment and install
-the backend dependencies (PowerShell):
-
-```powershell
-py -3 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-```
-
-Install frontend dependencies in a separate terminal:
+## Run locally
 
 ```powershell
 Set-Location .\frontend
 npm install
-```
-
-The frontend uses `http://localhost:8000` as its default API URL. To override
-it, copy `frontend/.env.example` to `frontend/.env.local` and set
-`NEXT_PUBLIC_API_BASE_URL`. Local environment files are ignored by Git.
-
-## Run the application
-
-Start the API from the project root:
-
-```powershell
-python -m uvicorn semantic_search.api.app:app --host 127.0.0.1 --port 8000
-```
-
-In another terminal, start the frontend:
-
-```powershell
-Set-Location .\frontend
+Copy-Item .env.example .env.local
+# Add your Supabase URL and publishable key to .env.local
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). The API health check is
-available at [http://localhost:8000/api/health](http://localhost:8000/api/health).
-The first semantic search may take longer while the embedding model loads.
+Open http://localhost:3000. No FastAPI server, localhost API URL, or CORS setup is required.
 
-## CLI usage
+## Local Python research tools
 
-Run commands from the project root. Add `--recursive` to index subdirectories;
-supported inputs are PDF, DOCX, TXT, Python, Java, JavaScript, and JSX.
+The `semantic_search` package retains its local compiler, processing, retrieval, and CLI modules for experiments and reproducible offline evaluation. These modules are not deployed as a web API.
+
+Python dependencies are listed in `requirements.txt`. CLI commands:
 
 ```powershell
-# Index files and directories into data/search.sqlite3
-python -m semantic_search index .\my_documents --recursive
-
-# Inspect the compiler output without searching
 python -m semantic_search explain "Find Python functions that process CSV files"
-
-# Search the local index
+python -m semantic_search index .\my_documents --recursive
 python -m semantic_search search "Find Python functions that process CSV files"
 ```
 
-Use `--db <path>` with `index` or `search` to select a different local SQLite
-database. The default database, uploaded files, and SQLite sidecar files are
-runtime data and are not tracked.
+## Checks
 
-## Tests and checks
-
-Run backend tests from the project root:
-
-```powershell
-python -m unittest discover -s tests -v
-```
-
-Run frontend checks from `frontend/`:
+From `frontend/`:
 
 ```powershell
 npm run lint
@@ -160,9 +75,11 @@ npm test
 npm run build
 ```
 
-End-to-end tests use Playwright; see [frontend/README.md](./frontend/README.md)
-for browser requirements, live-backend test behavior, and the full
-`npm run test:all` command.
+Python CLI/core tests:
+
+```powershell
+python -m unittest discover -s tests -v
+```
 
 ## Team
 
