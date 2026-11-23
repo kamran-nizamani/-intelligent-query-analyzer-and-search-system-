@@ -271,9 +271,8 @@ export class ApiClient {
         .select("id, file_name, storage_path, file_type, content_kind, file_size, chunk_count, status, created_at")
         .order("created_at", { ascending: false });
 
-      if (error || !data) {
-        return [];
-      }
+      if (error) throw new ApiError(`Failed to list indexed files: ${error.message}`);
+      if (!data) return [];
 
       return (data as DocumentRow[]).map((d) => ({
         id: d.id,
@@ -428,7 +427,8 @@ export class ApiClient {
         .order("created_at", { ascending: false })
         .limit(50);
 
-      if (error || !data) return [];
+      if (error) throw new ApiError(`Failed to fetch search history: ${error.message}`);
+      if (!data) return [];
 
       return (data as HistoryRow[]).map((row) => ({
         id: row.id,
@@ -452,7 +452,8 @@ export class ApiClient {
 
       const user = await this.ensureUserSession(supabase);
       if (user) {
-        await supabase.from("search_history").delete().eq("user_id", user.id);
+        const { error } = await supabase.from("search_history").delete().eq("user_id", user.id);
+        if (error) throw new ApiError(`Failed to clear search history: ${error.message}`);
       }
       return { cleared: true };
     }
