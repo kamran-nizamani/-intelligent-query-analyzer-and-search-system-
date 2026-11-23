@@ -1,3 +1,4 @@
+import type { User } from "@supabase/supabase-js";
 import type {
   CompilerTrace,
   IndexedFile,
@@ -10,6 +11,8 @@ import type {
 } from "@/types/search";
 import { getSupabaseClient, isSupabaseConfigured } from "./supabase/client";
 import { compileQueryTrace } from "./compiler-engine";
+
+let anonymousSignInPromise: Promise<User> | null = null;
 
 
 export type HealthResponse = {
@@ -80,14 +83,21 @@ export class ApiClient {
     if (currentError) throw new ApiError(`Supabase authentication failed: ${currentError.message}`, 401);
     if (current.user) return current.user;
 
-    const { data, error } = await supabase.auth.signInAnonymously();
-    if (error || !data.user) {
-      throw new ApiError(
-        `Anonymous sign-in is required for this app. Enable Anonymous Sign-Ins in Supabase Authentication settings. ${error?.message || ""}`,
-        401
-      );
+    if (!anonymousSignInPromise) {
+      anonymousSignInPromise = (async () => {
+        const { data, error } = await supabase.auth.signInAnonymously();
+        if (error || !data.user) {
+          throw new ApiError(
+            `Anonymous sign-in is required for this app. Enable Anonymous Sign-Ins in Supabase Authentication settings. ${error?.message || ""}`,
+            401
+          );
+        }
+        return data.user;
+      })().finally(() => {
+        anonymousSignInPromise = null;
+      });
     }
-    return data.user;
+    return anonymousSignInPromise;
   }
 
   async checkHealth(): Promise<HealthResponse> {
