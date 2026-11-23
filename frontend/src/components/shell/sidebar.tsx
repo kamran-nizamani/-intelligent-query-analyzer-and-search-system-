@@ -35,7 +35,7 @@ interface SidebarProps {
   onToggleCollapse: () => void;
   mobileOpen: boolean;
   onCloseMobile: () => void;
-  /** Number of indexed files, or null when Supabase has not answered. */}
+  /** Number of indexed files, or null when Supabase has not answered. */
   totalFiles: number | null;
   backendStatus: "checking" | "online" | "offline";
 }
