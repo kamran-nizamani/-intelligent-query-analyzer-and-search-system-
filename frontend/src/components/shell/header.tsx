@@ -122,7 +122,7 @@ export function Header({
           {theme === "dark" ? <Sun size={17} aria-hidden="true" /> : <Moon size={17} aria-hidden="true" />}
         </button>
 
-        {/* Real Supabase connection status (replaces the former hard-coded notification list) */}
+        {/* Local offline database status */}
         <div ref={statusWrapRef} style={{ position: "relative" }}>
           <button
             type="button"
@@ -132,14 +132,14 @@ export function Header({
             data-testid="backend-status"
             aria-expanded={showStatus}
             aria-haspopup="true"
-            aria-label={`Supabase ${STATUS_TEXT[backendStatus]}, show details`}
+            aria-label={`Local index ${STATUS_TEXT[backendStatus]}, show details`}
           >
             <span className={`status-dot status-${backendStatus}`} aria-hidden="true" />
             <span className="status-pill-text">Supabase {STATUS_TEXT[backendStatus]}</span>
           </button>
 
           {showStatus && (
-            <div className="popover" role="region" aria-label="Supabase connection details">
+            <div className="popover" role="region" aria-label="Local index details">
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
                 <Server size={15} aria-hidden="true" style={{ color: "var(--accent-text)" }} />
                 <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-main)" }}>
@@ -169,8 +169,8 @@ export function Header({
               ) : (
                 <p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5, marginBottom: 10 }}>
                   {backendStatus === "checking"
-                    ? "Checking Supabase connectivity…"
-                    : "Supabase did not respond. Check the project URL, publishable key, and Anonymous Sign-Ins setting."}
+                    ? "Checking local database…"
+                    : "Local database is unavailable. Check browser storage permissions."}
                 </p>
               )}
 
