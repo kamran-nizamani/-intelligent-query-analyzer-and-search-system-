@@ -163,10 +163,13 @@ export function SearchWorkspace() {
     if (m.status === "fulfilled") setMetrics(m.value);
   }, []);
 
-  // Load on mount and whenever a view that shows backend-owned data is opened.
+  // Load backend-owned data once on mount. Navigation must stay local and cheap:
+  // refetching health, files, history, and analytics on every view change adds
+  // avoidable main-thread work to sidebar clicks and can inflate INP.
+  // Mutations/search flows refresh the data explicitly when it actually changes.
   useEffect(() => {
     void refreshBackendData();
-  }, [currentView, refreshBackendData]);
+  }, [refreshBackendData]);
 
   const handleRetryConnection = async () => {
     setBackendStatus("checking");
