@@ -35,15 +35,15 @@ interface SidebarProps {
   onToggleCollapse: () => void;
   mobileOpen: boolean;
   onCloseMobile: () => void;
-  /** Number of indexed files, or null when Supabase has not answered. */
+  /** Number of locally indexed files, or null while browser storage loads. */
   totalFiles: number | null;
   backendStatus: "checking" | "online" | "offline";
 }
 
 const STATUS_LABEL = {
   checking: "Connecting…",
-  online: "Supabase connected",
-  offline: "Supabase offline",
+  online: "Local index ready",
+  offline: "Local storage unavailable",
 } as const;
 
 export function Sidebar({
@@ -156,7 +156,7 @@ export function Sidebar({
                   <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-main)" }}>
                     {STATUS_LABEL[backendStatus]}
                   </span>
-                  <span style={{ fontSize: 10.5, color: "var(--text-muted)" }}>Postgres FTS + pgvector + MiniLM</span>
+                  <span style={{ fontSize: 10.5, color: "var(--text-muted)" }}>Local keyword + MiniLM vectors</span>
                 </div>
               </div>
               <Sparkles size={14} aria-hidden="true" style={{ color: "var(--accent-text)" }} />
