@@ -38,7 +38,14 @@ alter table public.documents
   add column if not exists updated_at timestamptz not null default now();
 update public.documents set file_name = coalesce(file_name, 'untitled') where file_name is null;
 alter table public.documents alter column file_name set not null;
-alter table public.documents alter column id set default gen_random_uuid()::text;
+do $
+begin
+  if (select data_type from information_schema.columns where table_schema='public' and table_name='documents' and column_name='id') = 'text' then
+    alter table public.documents alter column id set default gen_random_uuid()::text;
+  elsif (select data_type from information_schema.columns where table_schema='public' and table_name='documents' and column_name='id') = 'uuid' then
+    alter table public.documents alter column id set default gen_random_uuid();
+  end if;
+end $;
 
 alter table public.document_chunks
   add column if not exists user_id uuid references auth.users(id) on delete cascade,
@@ -47,11 +54,20 @@ alter table public.document_chunks
   add column if not exists symbol_kind text,
   add column if not exists identifiers text[] not null default '{}',
   add column if not exists line_start integer,
-  add column if not exists line_end integer;
-update public.document_chunks set chunk_text = coalesce(chunk_text, display_content, '') where chunk_text is null;
+  add column if not exists line_end integer,
+  add column if not exists chunk_index integer not null default 0,
+  add column if not exists file_path text;
+update public.document_chunks set chunk_text = '' where chunk_text is null;
 alter table public.document_chunks alter column chunk_text set not null;
-alter table public.document_chunks alter column id set default gen_random_uuid()::text;
 alter table public.document_chunks alter column source_kind set default 'document';
+do $
+begin
+  if (select data_type from information_schema.columns where table_schema='public' and table_name='document_chunks' and column_name='id') = 'text' then
+    alter table public.document_chunks alter column id set default gen_random_uuid()::text;
+  elsif (select data_type from information_schema.columns where table_schema='public' and table_name='document_chunks' and column_name='id') = 'uuid' then
+    alter table public.document_chunks alter column id set default gen_random_uuid();
+  end if;
+end $;
 
 alter table public.search_history
   add column if not exists user_id uuid references auth.users(id) on delete cascade,
@@ -60,7 +76,14 @@ alter table public.search_history
   add column if not exists filters jsonb not null default '{}'::jsonb;
 update public.search_history set query_text = coalesce(query_text, '') where query_text is null;
 alter table public.search_history alter column query_text set not null;
-alter table public.search_history alter column id set default gen_random_uuid()::text;
+do $
+begin
+  if (select data_type from information_schema.columns where table_schema='public' and table_name='search_history' and column_name='id') = 'text' then
+    alter table public.search_history alter column id set default gen_random_uuid()::text;
+  elsif (select data_type from information_schema.columns where table_schema='public' and table_name='search_history' and column_name='id') = 'uuid' then
+    alter table public.search_history alter column id set default gen_random_uuid();
+  end if;
+end $;
 
 alter table public.documents alter column user_id set not null;
 alter table public.document_chunks alter column user_id set not null;
@@ -68,9 +91,26 @@ alter table public.search_history alter column user_id set not null;
 
 create index if not exists documents_user_created_idx on public.documents(user_id, created_at desc);
 create index if not exists chunks_user_document_idx on public.document_chunks(user_id, document_id);
-create index if not exists chunks_fts_idx on public.document_chunks using gin (to_tsvector('english', chunk_text));
-create index if not exists chunks_embedding_hnsw_idx on public.document_chunks using hnsw (embedding vector_cosine_ops);
 create index if not exists search_history_user_created_idx on public.search_history(user_id, created_at desc);
+
+-- Reuse any existing full-text/vector index from the earlier schema instead of duplicating it.
+do $
+begin
+  if not exists (
+    select 1 from pg_indexes
+    where schemaname='public' and tablename='document_chunks'
+      and indexdef ilike '%using gin%' and (indexdef ilike '%fts%' or indexdef ilike '%to_tsvector%')
+  ) then
+    create index chunks_fts_idx on public.document_chunks using gin (to_tsvector('english', chunk_text));
+  end if;
+  if not exists (
+    select 1 from pg_indexes
+    where schemaname='public' and tablename='document_chunks'
+      and indexdef ilike '%using hnsw%' and indexdef ilike '%embedding%'
+  ) then
+    create index chunks_embedding_hnsw_idx on public.document_chunks using hnsw (embedding vector_cosine_ops);
+  end if;
+end $;
 
 alter table public.documents enable row level security;
 alter table public.document_chunks enable row level security;
@@ -166,7 +206,7 @@ fused as (
   left join lexical_candidates l on l.id = ids.id
   left join vector_candidates v on v.id = ids.id
 )
-select c.id, c.document_id, d.file_name, d.storage_path, d.file_type, c.source_kind,
+select c.id::text, c.document_id::text, d.file_name, d.storage_path, d.file_type, c.source_kind,
   c.chunk_text, c.page_number, c.line_start, c.line_end, c.symbol_name, c.symbol_kind,
   c.language, c.identifiers, f.lexical_rank, f.vector_rank, f.rrf_score
 from fused f
