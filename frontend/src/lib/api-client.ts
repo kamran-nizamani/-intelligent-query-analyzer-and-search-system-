@@ -126,12 +126,14 @@ export class ApiClient {
         throw new ApiError("Supabase client not initialized", null, true);
       }
 
+      const user = await this.ensureUserSession(supabase);
       const t0 = performance.now();
       const trace = compileQueryTrace(query);
       const plan = trace.optimizedIr;
 
-      const { embedText } = await import("./embeddings/web-embedder");
-      const embedding = await embedText(plan.semanticQuery || query);
+      const embedding = options.mode === "lexical"
+        ? null
+        : await (await import("./embeddings/web-embedder")).embedText(plan.semanticQuery || query);
 
       interface SupabaseChunkRow {
         chunk_id: string;
@@ -219,8 +221,7 @@ export class ApiClient {
       });
 
       // Record to search_history in background
-      const user = await this.ensureUserSession(supabase);
-      if (user?.id) {
+      if (user.id) {
         void supabase.from("search_history").insert({
           user_id: user.id,
           query_text: query,
@@ -264,6 +265,7 @@ export class ApiClient {
         created_at: string;
       }
 
+      await this.ensureUserSession(supabase);
       const { data, error } = await supabase
         .from("documents")
         .select("id, file_name, storage_path, file_type, content_kind, file_size, chunk_count, status, created_at")
@@ -386,6 +388,7 @@ export class ApiClient {
         throw new ApiError("Supabase client not initialized", null, true);
       }
 
+      await this.ensureUserSession(supabase);
       const { data: document, error: lookupError } = await supabase
         .from("documents").select("storage_path").eq("id", fileId).single();
       if (lookupError) throw new ApiError(`Failed to find document: ${lookupError.message}`);
@@ -417,6 +420,7 @@ export class ApiClient {
         created_at: string;
       }
 
+      await this.ensureUserSession(supabase);
       await this.ensureUserSession(supabase);
       const { data, error } = await supabase
         .from("search_history")
@@ -463,6 +467,7 @@ export class ApiClient {
         throw new ApiError("Supabase not initialized", null, true);
       }
 
+      await this.ensureUserSession(supabase);
       const [docsRes, chunksRes, histRes] = await Promise.all([
         supabase.from("documents").select("content_kind"),
         supabase.from("document_chunks").select("id", { count: "exact", head: true }),
