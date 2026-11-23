@@ -5,7 +5,7 @@ import { PlugZap, RefreshCw } from "lucide-react";
 import { yieldToMain } from "@/lib/scheduler";
 
 interface BackendBannerProps {
-  onRe-check: () => void | Promise<void>;
+  onRetry: () => void | Promise<void>;
 }
 
 /** Shown when local browser storage is unavailable so empty screens are never mistaken for real empty data. */
