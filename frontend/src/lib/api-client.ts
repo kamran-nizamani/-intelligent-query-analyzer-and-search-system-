@@ -115,8 +115,8 @@ function lexicalScore(query: string, text: string): number {
   const haystack = text.toLowerCase();
   let score = 0;
   for (const term of terms) {
-    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const matches = haystack.match(new RegExp(escaped, "g"))?.length ?? 0;
+    const matches = haystack.split(term).length - 1;
+
     if (matches) score += 1 + Math.log(1 + matches);
   }
   return score / Math.sqrt(Math.max(1, haystack.split(/\s+/).length));
