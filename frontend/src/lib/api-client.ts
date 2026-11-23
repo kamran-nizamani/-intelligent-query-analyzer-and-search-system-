@@ -6,8 +6,7 @@ import { compileQueryTrace } from "./compiler-engine";
 
 const DB_NAME = "intelligent-query-analyzer";
 const DB_VERSION = 1;
-const STORES = ["documents", "chunks", "history"] as const;
-type StoreName = (typeof STORES)[number];
+type StoreName = "documents" | "chunks" | "history";
 
 type LocalDocument = {
   id: string; file_name: string; file_type: string; content_kind: SourceKind;
@@ -82,17 +81,6 @@ async function putMany<T>(storeName: StoreName, values: T[]): Promise<void> {
     });
   } finally { db.close(); }
 }
-async function remove(storeName: StoreName, key: string): Promise<void> {
-  const db = await openDatabase();
-  try {
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(storeName, "readwrite");
-      tx.objectStore(storeName).delete(key);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  } finally { db.close(); }
-}
 async function clear(storeName: StoreName): Promise<void> {
   const db = await openDatabase();
   try {
@@ -136,7 +124,7 @@ function lexicalScore(query: string, text: string): number {
 
 export class ApiClient {
   async checkHealth(): Promise<HealthResponse> {
-    const [documents, chunks] = await Promise.all([all<LocalDocument>("documents"), all<LocalChunk>("chunks")]);
+    const chunks = await all<LocalChunk>("chunks");
     return {
       status: "healthy", database: "Browser IndexedDB (offline-first)",
       chunk_count: chunks.length, embedding_model: "Xenova/all-MiniLM-L6-v2 (local ONNX)",
