@@ -208,7 +208,9 @@ export class ApiClient {
       queryVector = await embedText(plan.semanticQuery || query);
     }
     const candidates = chunks.filter((chunk) => {
-      if (options.kind && options.kind !== "all" && chunk.source_kind !== options.kind) return false;
+      const contentKind = plan.filters.content_kind ?? options.kind;
+      if (contentKind && contentKind !== "all" && chunk.source_kind !== contentKind) return false;
+      if (options.type && options.type !== "all" && chunk.file_type.toLowerCase() !== options.type.toLowerCase()) return false;
       if (plan.filters.language && chunk.language !== plan.filters.language) return false;
       if (plan.filters.symbol_kind && chunk.symbol_kind !== plan.filters.symbol_kind) return false;
       return true;
@@ -250,7 +252,7 @@ export class ApiClient {
       latency_ms: latencyMs, filters: plan.filters, created_at: new Date().toISOString(),
     };
     await putMany("history", [history]);
-    return { results, latencyMs, trace, totalHits: results.length };
+    return { results, latencyMs, trace, totalHits: ranked.length };
   }
 
   async getHistory(): Promise<SearchHistoryEntry[]> {
@@ -261,7 +263,11 @@ export class ApiClient {
         id: row.id, query: row.query_text,
         timestamp: date.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"}),
         date: date.toLocaleDateString(), mode: row.mode, resultsCount: row.match_count,
-        latencyMs: row.latency_ms, filtersApplied: row.filters,
+        latencyMs: row.latency_ms,
+        filtersApplied: {
+          kind: row.filters.content_kind ?? row.filters.kind,
+          type: row.filters.type,
+        },
       };
     });
   }
