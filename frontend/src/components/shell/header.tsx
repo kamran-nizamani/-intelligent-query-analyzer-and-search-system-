@@ -135,7 +135,7 @@ export function Header({
             aria-label={`Local index ${STATUS_TEXT[backendStatus]}, show details`}
           >
             <span className={`status-dot status-${backendStatus}`} aria-hidden="true" />
-            <span className="status-pill-text">Supabase {STATUS_TEXT[backendStatus]}</span>
+            <span className="status-pill-text">Local index {STATUS_TEXT[backendStatus]}</span>
           </button>
 
           {showStatus && (
@@ -143,7 +143,7 @@ export function Header({
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
                 <Server size={15} aria-hidden="true" style={{ color: "var(--accent-text)" }} />
                 <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-main)" }}>
-                  Supabase: {STATUS_TEXT[backendStatus]}
+                  Local index: {STATUS_TEXT[backendStatus]}
                 </span>
               </div>
 
