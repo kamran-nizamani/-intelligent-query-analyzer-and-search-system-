@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
+// Avoid caching HTML that may be rendered around per-browser anonymous sessions.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Intelligent Query Analyzer & Search System",
   description:
