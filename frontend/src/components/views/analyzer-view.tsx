@@ -549,7 +549,7 @@ export function AnalyzerView({
             <div style={{ background: "var(--bg-card-subtle)", padding: 12, borderRadius: 6 }}>
               <div style={{ fontSize: 11, color: "var(--text-faint)", fontWeight: 700 }}>DUAL QUERIES</div>
               <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
-                Lexical BM25 + Dense FAISS MiniLM
+                PostgreSQL full-text + pgvector + MiniLM
               </div>
             </div>
           </div>
