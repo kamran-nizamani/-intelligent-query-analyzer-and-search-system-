@@ -420,7 +420,6 @@ export class ApiClient {
       }
 
       await this.ensureUserSession(supabase);
-      await this.ensureUserSession(supabase);
       const { data, error } = await supabase
         .from("search_history")
         .select("id, query_text, mode, match_count, latency_ms, filters, created_at")
