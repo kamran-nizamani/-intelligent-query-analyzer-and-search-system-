@@ -9,8 +9,7 @@ import {
   Terminal,
 } from "lucide-react";
 import type { CompilerTrace, CompilerToken } from "@/types/search";
-import { compileQueryTrace } from "@/lib/compiler-engine";
-import { apiClient, ApiError } from "@/lib/api-client";
+import { apiClient } from "@/lib/api-client";
 import { sampleQueries } from "@/data/example-queries";
 import { TraceSourceNotice, type TraceSource } from "../ui/trace-source-notice";
 
@@ -42,20 +41,12 @@ export function AnalyzerView({
       const realTrace = await apiClient.explain(text);
       if (seq !== requestSeq.current) return;
       setTrace(realTrace);
-      setSource("backend");
+      setSource("local");
     } catch (err) {
       if (seq !== requestSeq.current) return;
-      const message = err instanceof Error ? err.message : "Compiler request failed";
-      setError(message);
-      if (err instanceof ApiError && !err.network) {
-        // The backend understood and rejected the query: show that, not a guess.
-        setTrace(null);
-        setSource(null);
-      } else {
-        // Backend unreachable: offer a clearly-labelled local approximation.
-        setTrace(compileQueryTrace(text));
-        setSource("local-fallback");
-      }
+      setError(err instanceof Error ? err.message : "Compiler failed");
+      setTrace(null);
+      setSource(null);
     } finally {
       if (seq === requestSeq.current) {
         setCompiling(false);
@@ -196,9 +187,9 @@ export function AnalyzerView({
         <div className="metric-card" style={{ padding: "12px 14px" }}>
           <span className="metric-label">Compiler Status</span>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
-            <CheckCircle2 size={16} aria-hidden="true" style={{ color: source === "backend" ? "var(--success)" : "var(--warning)" }} />
+            <CheckCircle2 size={16} aria-hidden="true" style={{ color: source === "local" ? "var(--success)" : "var(--warning)" }} />
             <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-main)" }}>
-              {source === "backend" ? "Compiled by backend" : "Local approximation"}
+              {source === "local" ? "Browser compiler" : "Unavailable"}
             </span>
           </div>
         </div>
