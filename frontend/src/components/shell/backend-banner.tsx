@@ -5,10 +5,10 @@ import { PlugZap, RefreshCw } from "lucide-react";
 import { yieldToMain } from "@/lib/scheduler";
 
 interface BackendBannerProps {
-  onRetry: () => void | Promise<void>;
+  onRe-check: () => void | Promise<void>;
 }
 
-/** Shown when Supabase is unavailable so empty screens are never mistaken for real empty data. */
+/** Shown when local browser storage is unavailable so empty screens are never mistaken for real empty data. */
 export function BackendBanner({ onRetry }: BackendBannerProps) {
   const [retrying, setRetrying] = useState(false);
 
@@ -26,11 +26,9 @@ export function BackendBanner({ onRetry }: BackendBannerProps) {
     <div role="alert" className="backend-banner" data-testid="backend-banner">
       <PlugZap size={16} aria-hidden="true" style={{ flexShrink: 0 }} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <strong>Supabase connection unavailable.</strong>{" "}
+        <strong>Local storage unavailable.</strong>{" "}
         <span>
-          Search, uploads, history and analytics require the configured Supabase project.
-          Check the Vercel environment variables and enable Anonymous Sign-Ins in Supabase Authentication.
-          Nothing shown below is real data until the connection is restored.
+          Search, uploads, history and analytics need browser IndexedDB. Check browser storage permissions or available disk space. Nothing shown below is real data until local storage is ready.
         </span>
       </div>
       <button
