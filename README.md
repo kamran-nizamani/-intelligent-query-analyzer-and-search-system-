@@ -1,13 +1,13 @@
 # Intelligent Query Analyzer and Search System
 
-A compiler-assisted document and source-code search workspace. The production web application runs on **Vercel + Supabase** with no FastAPI service.
+A compiler-assisted document and source-code search workspace. The web application is **offline-first** and runs on Vercel as a PWA. Local documents and search data are stored in browser IndexedDB; Supabase is not required.
 
 ## Features
 
 - Seven-stage TypeScript query compiler: lexer, parser, AST, semantic checks, IR, optimization, and retrieval planning.
 - Browser-side extraction and chunking for PDF, DOCX, TXT, Python, Java, JavaScript, and related source files.
 - Browser-side 384-dimensional MiniLM embeddings using Transformers.js.
-- PostgreSQL full-text search and pgvector semantic retrieval, combined with Reciprocal Rank Fusion (RRF).
+- Local keyword scoring and MiniLM vector similarity, combined with Reciprocal Rank Fusion (RRF).
 - Private document storage, per-user document/chunk records, search history, and usage analytics.
 - Local Python CLI and retrieval implementation remain available for offline experimentation; they are not part of the deployed web runtime.
 
@@ -18,25 +18,25 @@ Browser / Next.js (Vercel)
   ├── TypeScript query compiler
   ├── Document extraction + chunking
   ├── MiniLM embeddings (Transformers.js)
-  └── Supabase JS client
-        ├── Supabase Auth (anonymous sessions)
+  └── IndexedDB local repository
+        ├── Documents + extracted chunks
         ├── Storage (private documents bucket)
-        └── PostgreSQL
+        ├── MiniLM embeddings
               ├── documents + document_chunks
-              ├── PostgreSQL full-text search
-              ├── pgvector HNSW
+        └── Search history + analytics
+
               ├── hybrid_search_rrf() RPC
               └── search_history
 ```
 
-## Supabase configuration
+## Offline usage
 
 Configure these Vercel environment variables in Production, Preview, and Development:
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 
-Enable Anonymous Sign-Ins in Supabase Authentication settings. The application creates a separate anonymous session per browser; Row Level Security scopes documents, chunks, history, and Storage objects to that user. Never expose a service-role or secret key in browser code.
+Connect once to download the app shell and MiniLM model. The service worker caches application assets and the model runtime caches model files. Indexed documents remain in this browser profile; clearing site data removes them. Export/restore and cross-device sync are not included yet.
 
 Database schema and RLS are defined in `supabase/migrations`.
 
@@ -46,7 +46,7 @@ Database schema and RLS are defined in `supabase/migrations`.
 Set-Location .\frontend
 npm install
 Copy-Item .env.example .env.local
-# Add your Supabase URL and publishable key to .env.local
+# No Supabase environment variables are required.
 npm run dev
 ```
 
