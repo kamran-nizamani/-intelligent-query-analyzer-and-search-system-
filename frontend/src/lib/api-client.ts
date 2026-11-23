@@ -166,7 +166,7 @@ export class ApiClient {
         query_text: plan.lexicalQuery || query,
         query_embedding: embedding,
         match_limit: options.limit || plan.limit || 10,
-        filter_kind: (plan.filters.content_kind as string) || null,
+        filter_kind: options.kind && options.kind !== "all" ? options.kind : (plan.filters.content_kind as string) || null,
         filter_language: (plan.filters.language as string) || null,
         filter_symbol: (plan.filters.symbol_kind as string) || null,
         rrf_k: 60,
@@ -385,8 +385,6 @@ export class ApiClient {
       return { uploaded: uploadedResults, totalFilesIndexed: uploadedResults.length };
     }
 
-    const formData = new FormData();
-    for (const file of files) formData.append("files", file);
     return this.request();
   }
 
