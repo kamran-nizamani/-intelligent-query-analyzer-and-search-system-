@@ -1,14 +1,14 @@
 # Intelligent Query Analyzer — Frontend
 
-Next.js 15 / React 19 / TypeScript. The deployed application is **Supabase-native**: there is no FastAPI service and no separate API host to configure.
+Next.js 15 / React 19 / TypeScript. The deployed application is **offline-first**: document data, embeddings, and search history live in browser IndexedDB; no API host or Supabase project is required.
 
 ## Architecture
 
 - **Vercel:** hosts the Next.js application.
-- **Supabase Auth:** anonymous user sessions, so each browser gets a private workspace.
-- **Supabase Storage:** private `documents` bucket for uploaded files.
-- **Supabase PostgreSQL:** document metadata, chunks, search history, and analytics.
-- **pgvector + PostgreSQL full-text search:** semantic and lexical retrieval combined with Reciprocal Rank Fusion.
+- **Local persistence:** IndexedDB stores documents, extracted chunks, embeddings, and search history per browser.
+- **Private by browser profile:** local data stays in the current browser profile unless exported.
+- **Local analytics:** computed from IndexedDB records.
+- **Local hybrid retrieval:** keyword scoring + MiniLM cosine similarity + Reciprocal Rank Fusion.
 - **Browser:** extracts PDF/DOCX/TXT and source code, runs the TypeScript query compiler, and generates 384-dimensional MiniLM embeddings with Transformers.js.
 
 ## Environment variables
@@ -20,12 +20,12 @@ NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 ```
 
-The legacy `NEXT_PUBLIC_SUPABASE_ANON_KEY` is accepted as a compatibility fallback. Never put a Supabase secret/service-role key in a `NEXT_PUBLIC_*` variable.
+The first visit needs an internet connection to download the app and MiniLM model. The service worker caches the app shell and static assets; Transformers.js caches model assets in the browser. Reopen the app after its first successful load before going offline.
 
-## Supabase setup
+## Offline-first behavior
 
 1. Apply the SQL migration in `../supabase/migrations` (the deployed project has the schema migration).
-2. In Supabase Dashboard → Authentication → Sign In / Providers, enable **Anonymous Sign-Ins**. The app creates a per-browser anonymous account automatically; RLS keeps each user's documents, chunks, and history private.
+Indexed files and history are stored only on this device/browser. Clearing site data deletes the local index. Export/restore and cross-device sync are not included yet.
 3. Confirm the private Storage bucket named `documents` exists. The migration creates it and installs owner-scoped policies.
 4. Keep Row Level Security enabled on `documents`, `document_chunks`, and `search_history`.
 
@@ -35,7 +35,7 @@ The legacy `NEXT_PUBLIC_SUPABASE_ANON_KEY` is accepted as a compatibility fallba
 Set-Location .\frontend
 npm install
 Copy-Item .env.example .env.local
-# Fill in the Supabase URL and publishable key in .env.local
+# No Supabase environment variables are required for local-only mode.
 npm run dev
 ```
 
