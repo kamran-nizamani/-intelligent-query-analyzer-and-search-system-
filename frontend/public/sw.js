@@ -11,7 +11,7 @@ self.addEventListener("install", (event) => {
     // Pre-cache the scripts and styles referenced by the first rendered page.
     const html = await page.text();
     const assets = new Set([
-      ...Array.from(html.matchAll(/(?:src|href)="([^"]*\\/_next\\/static\\/[^"]+)"/g), (match) => match[1]),
+      ...Array.from(html.matchAll(/(?:src|href)="([^"]+)"/g), (match) => match[1]).filter((asset) => asset.includes("/_next/static/")),
     ]);
     const runtime = await caches.open(RUNTIME_CACHE);
     await Promise.all([...assets].map(async (asset) => {
@@ -46,7 +46,7 @@ self.addEventListener("fetch", (event) => {
     })());
     return;
   }
-  if (url.pathname.startsWith("/_next/static/") || url.pathname === "/manifest.webmanifest" || /\\.(?:woff2?|png|svg|ico)$/.test(url.pathname)) {
+  if (url.pathname.startsWith("/_next/static/") || url.pathname === "/manifest.webmanifest" || /[.](?:woff2?|png|svg|ico)$/.test(url.pathname)) {
     event.respondWith((async () => {
       const cache = await caches.open(RUNTIME_CACHE);
       const cached = await cache.match(request);
