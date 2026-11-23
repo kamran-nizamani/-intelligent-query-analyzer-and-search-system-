@@ -245,7 +245,7 @@ export function PipelineView({
                     }}
                   >
                     <Clock size={10} aria-hidden="true" />
-                    <span title="Nominal per-stage figure reported by the backend; not measured">~{stage.durationMs}ms</span>
+                    <span title="Nominal per-stage estimate; not measured">~{stage.durationMs}ms</span>
                   </div>
                 </button>
 
