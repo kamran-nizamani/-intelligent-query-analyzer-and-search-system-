@@ -11,8 +11,7 @@ import {
   Play,
 } from "lucide-react";
 import type { CompilerTrace } from "@/types/search";
-import { compileQueryTrace } from "@/lib/compiler-engine";
-import { apiClient, ApiError } from "@/lib/api-client";
+import { apiClient } from "@/lib/api-client";
 import { TraceSourceNotice, type TraceSource } from "../ui/trace-source-notice";
 import { sampleQueries } from "@/data/example-queries";
 
@@ -43,20 +42,13 @@ export function PipelineView({
       const realTrace = await apiClient.explain(text);
       if (seq !== requestSeq.current) return;
       setTrace(realTrace);
-      setSource("backend");
+      setSource("local");
       setSelectedStageIndex(0);
     } catch (err) {
       if (seq !== requestSeq.current) return;
-      setError(err instanceof Error ? err.message : "Compiler request failed");
-      if (err instanceof ApiError && !err.network) {
-        setTrace(null);
-        setSource(null);
-      } else {
-        // Backend unreachable: clearly-labelled local approximation.
-        setTrace(compileQueryTrace(text));
-        setSource("local-fallback");
-        setSelectedStageIndex(0);
-      }
+      setError(err instanceof Error ? err.message : "Compiler failed");
+      setTrace(null);
+      setSource(null);
     } finally {
       if (seq === requestSeq.current) setLoading(false);
     }
