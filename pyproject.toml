@@ -12,10 +12,5 @@ dependencies = [
     "tree-sitter-javascript>=0.23",
     "faiss-cpu>=1.12",
     "sentence-transformers>=5.0",
-    "fastapi>=0.115",
-    "uvicorn>=0.30",
-    "python-multipart>=0.0.12",
 ]
 
-[tool.vercel]
-entrypoint = "semantic_search.api:app"
