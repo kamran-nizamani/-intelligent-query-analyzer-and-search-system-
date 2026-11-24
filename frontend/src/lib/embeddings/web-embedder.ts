@@ -1,5 +1,5 @@
 /**
- * Client-side embedding generation using Transformers.js (@xenova/transformers).
+ * Client-side embedding generation using the official Hugging Face Transformers.js v4 runtime.
  * Generates 384-dimensional normalized float vectors for query and chunk embeddings.
  */
 
@@ -35,22 +35,44 @@ export async function getWebEmbedder(
       onProgress?.({ status: "init" });
       await yieldToMain();
 
-      const { pipeline, env } = await import("@xenova/transformers");
+      const { pipeline, env } = await import("@huggingface/transformers");
       env.allowLocalModels = false;
+      env.allowRemoteModels = true;
       env.useBrowserCache = true;
+      env.useWasmCache = true;
 
-      const pipe = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2", {
-        quantized: true,
-        progress_callback: (item: { status?: string; progress?: number; file?: string }) => {
-          if (item?.status === "progress" && item.progress !== undefined) {
-            onProgress?.({
-              status: "downloading",
-              progress: Math.round(item.progress),
-              file: item.file,
-            });
-          }
-        },
-      });
+      const progress_callback = (item: { status?: string; progress?: number; file?: string }) => {
+        if (
+          (item?.status === "progress" || item?.status === "progress_total") &&
+          item.progress !== undefined
+        ) {
+          onProgress?.({
+            status: "downloading",
+            progress: Math.round(item.progress),
+            file: item.file,
+          });
+        }
+      };
+
+      // Prefer WebGPU when available; fall back to the default WASM runtime if
+      // the browser exposes WebGPU but the device/driver cannot initialize it.
+      let pipe;
+      if ("gpu" in navigator) {
+        try {
+          pipe = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2", {
+            device: "webgpu",
+            progress_callback,
+          });
+        } catch {
+          pipe = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2", {
+            progress_callback,
+          });
+        }
+      } else {
+        pipe = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2", {
+          progress_callback,
+        });
+      }
 
       onProgress?.({ status: "ready" });
       await yieldToMain();
