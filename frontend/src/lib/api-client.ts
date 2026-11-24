@@ -155,8 +155,12 @@ export class ApiClient {
       const trace = compileQueryTrace(query);
       const plan = trace.optimizedIr;
 
-      const { embedText } = await import("./embeddings/web-embedder");
-      const embedding = await embedText(plan.semanticQuery || query);
+      // Generate dense vectors only when the selected mode needs semantic retrieval.
+      const searchMode = options.mode || "hybrid";
+      const embedding =
+        searchMode === "lexical"
+          ? null
+          : await (await import("./embeddings/web-embedder")).embedText(plan.semanticQuery || query);
 
       interface SupabaseChunkRow {
         chunk_id: number;
@@ -178,13 +182,14 @@ export class ApiClient {
         rrf_score: number;
       }
 
-      const { data, error } = await supabase.rpc("hybrid_search_rrf", {
+      const { data, error } = await supabase.rpc("search_chunks_v2", {
         query_text: plan.lexicalQuery || query,
         query_embedding: embedding,
         match_limit: options.limit || plan.limit || 10,
         filter_kind: (plan.filters.content_kind as string) || null,
         filter_language: (plan.filters.language as string) || null,
         filter_symbol: (plan.filters.symbol_kind as string) || null,
+        search_mode: searchMode,
         rrf_k: 60,
       });
 
