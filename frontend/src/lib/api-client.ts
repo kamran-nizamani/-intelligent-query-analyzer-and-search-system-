@@ -163,7 +163,7 @@ export class ApiClient {
           : await (await import("./embeddings/web-embedder")).embedText(plan.semanticQuery || query);
 
       interface SupabaseChunkRow {
-        chunk_id: number;
+        chunk_id: string;
         document_id: string;
         file_name: string;
         storage_path: string;
