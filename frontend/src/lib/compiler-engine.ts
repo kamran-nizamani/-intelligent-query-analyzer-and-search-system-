@@ -11,8 +11,8 @@ const ACTION_WORDS = new Set(["find", "show", "search", "locate", "get", "list",
 const TARGET_WORDS = new Map<string, string>([
   ["functions", "function"],
   ["function", "function"],
-  ["methods", "function"],
-  ["method", "function"],
+  ["methods", "method"],
+  ["method", "method"],
   ["classes", "class"],
   ["class", "class"],
   ["code", "code"],
@@ -205,7 +205,7 @@ export function generateIR(ast: QueryAST): QueryIR {
     filters["content_kind"] = "code";
   }
 
-  if (ast.target === "function" || ast.target === "class") {
+  if (ast.target === "function" || ast.target === "method" || ast.target === "class") {
     filters["symbol_kind"] = ast.target;
   }
 
