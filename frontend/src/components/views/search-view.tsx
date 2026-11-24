@@ -500,6 +500,9 @@ export function SearchView({
                     setSelectedKind("all");
                     setSelectedType("ALL");
                   });
+                  if (results !== null && query.trim()) {
+                    onExecuteSearch(query.trim(), searchMode, "all", "ALL");
+                  }
                 }}
               >
                 Reset filters
