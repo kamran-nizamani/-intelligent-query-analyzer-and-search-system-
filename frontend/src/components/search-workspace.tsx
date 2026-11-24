@@ -158,9 +158,9 @@ export function SearchWorkspace() {
       setHealth(null);
       setBackendStatus("offline");
     }
-    if (f.status === "fulfilled") setFiles(f.value);
-    if (hist.status === "fulfilled") setHistory(hist.value);
-    if (m.status === "fulfilled") setMetrics(m.value);
+    setFiles(f.status === "fulfilled" ? f.value : null);
+    setHistory(hist.status === "fulfilled" ? hist.value : null);
+    setMetrics(m.status === "fulfilled" ? m.value : null);
   }, []);
 
   // Load on mount and whenever a view that shows backend-owned data is opened.
