@@ -3,6 +3,7 @@
 import React from "react";
 import {
   Info,
+  Laptop,
   Mic,
   Moon,
   Palette,
@@ -120,6 +121,27 @@ export function SettingsView({
                 >
                   <Sun size={13} />
                   <span>Light</span>
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={settings.theme === "system"}
+                  onClick={() => onUpdateSettings({ theme: "system" })}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "6px 12px",
+                    borderRadius: 5,
+                    border: "none",
+                    background: settings.theme === "system" ? "var(--accent-primary)" : "transparent",
+                    color: settings.theme === "system" ? "#fff" : "var(--text-muted)",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  <Laptop size={13} />
+                  <span>System</span>
                 </button>
               </div>
             </div>

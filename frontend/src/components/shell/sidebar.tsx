@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { startTransition } from "react";
 import {
   Activity,
   Binary,
@@ -125,7 +125,9 @@ export function Sidebar({
                 key={item.id}
                 type="button"
                 onClick={() => {
-                  onSelectView(item.id);
+                  startTransition(() => {
+                    onSelectView(item.id);
+                  });
                   if (mobileOpen) onCloseMobile();
                 }}
                 className={`nav-link ${isActive ? "active" : ""}`}

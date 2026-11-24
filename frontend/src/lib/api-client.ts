@@ -79,16 +79,18 @@ export class ApiClient {
   }
 
   private async ensureUserSession(supabase: NonNullable<ReturnType<typeof getSupabaseClient>>) {
-    const { data: current, error: currentError } = await supabase.auth.getUser();
-    if (currentError) throw new ApiError(`Supabase authentication failed: ${currentError.message}`, 401);
-    if (current.user) return current.user;
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (sessionData?.session?.user) return sessionData.session.user;
+
+    const { data: current } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
+    if (current?.user) return current.user;
 
     if (!anonymousSignInPromise) {
       anonymousSignInPromise = (async () => {
         const { data, error } = await supabase.auth.signInAnonymously();
-        if (error || !data.user) {
+        if (error || !data?.user) {
           throw new ApiError(
-            `Anonymous sign-in is required for this app. Enable Anonymous Sign-Ins in Supabase Authentication settings. ${error?.message || ""}`,
+            `Anonymous sign-in is required for this app. Enable Anonymous Sign-Ins in Supabase Authentication settings (Authentication > Providers > Anonymous). ${error?.message || ""}`.trim(),
             401
           );
         }
@@ -165,16 +167,38 @@ export class ApiClient {
         rrf_score: number;
       }
 
-      const { data, error } = await supabase.rpc("hybrid_search_rrf", {
+      const rpcKind = options.kind && options.kind !== "all" ? options.kind : null;
+      const rpcLang = (plan.filters.language as string) || null;
+      const rpcSymbol = (plan.filters.symbol_kind as string) || null;
+
+      const { data: initialData, error } = await supabase.rpc("hybrid_search_rrf", {
         query_text: plan.lexicalQuery || query,
         query_embedding: embedding,
         match_limit: options.limit || plan.limit || 10,
-        filter_kind: options.kind && options.kind !== "all" ? options.kind : (plan.filters.content_kind as string) || null,
-        filter_language: (plan.filters.language as string) || null,
-        filter_symbol: (plan.filters.symbol_kind as string) || null,
+        filter_kind: rpcKind,
+        filter_language: rpcLang,
+        filter_symbol: rpcSymbol,
         rrf_k: 60,
         search_mode: options.mode || "hybrid",
       });
+      let data = initialData;
+
+      // Search fallback: if narrow compiler filters produced 0 results, retry without language/symbol filters
+      if (!error && (!data || (data as unknown[]).length === 0) && (rpcLang || rpcSymbol)) {
+        const fallbackRes = await supabase.rpc("hybrid_search_rrf", {
+          query_text: query,
+          query_embedding: embedding,
+          match_limit: options.limit || plan.limit || 10,
+          filter_kind: rpcKind,
+          filter_language: null,
+          filter_symbol: null,
+          rrf_k: 60,
+          search_mode: options.mode || "hybrid",
+        });
+        if (!fallbackRes.error && fallbackRes.data && (fallbackRes.data as unknown[]).length > 0) {
+          data = fallbackRes.data;
+        }
+      }
 
       if (error) {
         throw new ApiError(`Search query execution failed: ${error.message}`, 500);
@@ -321,6 +345,11 @@ export class ApiClient {
       for (const file of files) {
         // 1. Extract file in browser
         const extracted = await extractFileInBrowser(file);
+        if (!extracted.chunks || extracted.chunks.length === 0) {
+          throw new ApiError(
+            `No searchable text or code chunks could be extracted from "${file.name}". Please ensure the file is not empty or password-protected.`
+          );
+        }
 
         // 2. Upload file to Supabase Storage
         const storagePath = `${user.id}/${Date.now()}_${file.name}`;
@@ -349,32 +378,37 @@ export class ApiClient {
           .single();
 
         if (docError || !docRecord) {
+          try {
+            await supabase.storage.from("documents").remove([storagePath]);
+          } catch {
+            /* ignore cleanup error */
+          }
           throw new ApiError(`Document database record creation failed: ${docError?.message}`);
         }
 
-        // 4. Compute embeddings for chunks
-        const chunkTexts = extracted.chunks.map((c) => c.chunkText);
-        const embeddings = await embedBatch(chunkTexts);
+        try {
+          // 4. Compute embeddings for chunks
+          const chunkTexts = extracted.chunks.map((c) => c.chunkText);
+          const embeddings = await embedBatch(chunkTexts);
 
-        // 5. Bulk insert document chunks
-        const chunkRows = extracted.chunks.map((chunk, idx) => ({
-          document_id: docRecord.id,
-          user_id: user.id,
-          chunk_index: idx,
-          chunk_text: chunk.chunkText,
-          file_path: storagePath,
-          source_kind: chunk.sourceKind,
-          page_number: chunk.pageNumber ?? null,
-          line_start: chunk.lineStart ?? null,
-          line_end: chunk.lineEnd ?? null,
-          symbol_name: chunk.symbolName ?? null,
-          symbol_kind: chunk.symbolKind ?? null,
-          language: chunk.language ?? null,
-          identifiers: chunk.identifiers ?? [],
-          embedding: embeddings[idx],
-        }));
+          // 5. Bulk insert document chunks
+          const chunkRows = extracted.chunks.map((chunk, idx) => ({
+            document_id: docRecord.id,
+            user_id: user.id,
+            chunk_index: idx,
+            chunk_text: chunk.chunkText,
+            file_path: storagePath,
+            source_kind: chunk.sourceKind,
+            page_number: chunk.pageNumber ?? null,
+            line_start: chunk.lineStart ?? null,
+            line_end: chunk.lineEnd ?? null,
+            symbol_name: chunk.symbolName ?? null,
+            symbol_kind: chunk.symbolKind ?? null,
+            language: chunk.language ?? null,
+            identifiers: chunk.identifiers ?? [],
+            embedding: embeddings[idx],
+          }));
 
-        if (chunkRows.length > 0) {
           const { error: chunkError } = await supabase
             .from("document_chunks")
             .insert(chunkRows);
@@ -382,18 +416,37 @@ export class ApiClient {
           if (chunkError) {
             throw new ApiError(`Chunk insertion failed: ${chunkError.message}`);
           }
-        }
 
-        const { error: statusError } = await supabase
-          .from("documents")
-          .update({ status: "indexed" })
-          .eq("id", docRecord.id)
-          .eq("user_id", user.id);
-        if (statusError) {
-          throw new ApiError(`Indexed chunks but could not update document status: ${statusError.message}`);
-        }
+          const { error: statusError } = await supabase
+            .from("documents")
+            .update({ status: "indexed", chunk_count: chunkRows.length })
+            .eq("id", docRecord.id)
+            .eq("user_id", user.id);
 
-        uploadedResults.push({ id: docRecord.id, name: file.name, chunks: chunkRows.length });
+          if (statusError) {
+            throw new ApiError(`Indexed chunks but could not update document status: ${statusError.message}`);
+          }
+
+          uploadedResults.push({ id: docRecord.id, name: file.name, chunks: chunkRows.length });
+        } catch (uploadErr) {
+          // Clean up partial chunks and document record on failure
+          try {
+            await supabase.from("document_chunks").delete().eq("document_id", docRecord.id);
+          } catch {
+            /* ignore cleanup error */
+          }
+          try {
+            await supabase.from("documents").delete().eq("id", docRecord.id);
+          } catch {
+            /* ignore cleanup error */
+          }
+          try {
+            await supabase.storage.from("documents").remove([storagePath]);
+          } catch {
+            /* ignore cleanup error */
+          }
+          throw uploadErr;
+        }
       }
 
       return { uploaded: uploadedResults, totalFilesIndexed: uploadedResults.length };

@@ -1,8 +1,10 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ApiClient, ApiError } from "@/lib/api-client";
 import { MAX_UPLOAD_BYTES, validateUploads } from "@/lib/upload-validation";
 import { extractHighlightTerms } from "@/lib/highlight";
 import { compileQueryTrace } from "@/lib/compiler-engine";
+import { extractBasicPdfText } from "@/lib/extractors/client-extractors";
+import zlib from "zlib";
 
 const file = (name: string, size: number) => new File([new Uint8Array(size)], name);
 
@@ -78,5 +80,31 @@ describe("browser-based TypeScript compiler", () => {
     expect(t.ast.language).toBe("python");
     expect(t.stages.length).toBeGreaterThanOrEqual(7);
     expect(t.optimizedIr.limit).toBeGreaterThan(0);
+  });
+});
+
+describe("PDF FlateDecode extraction", () => {
+  it("extracts text from compressed FlateDecode PDF streams", async () => {
+    const streamContent = "BT /F1 12 Tf 72 712 Td (Software Requirements Specification) Tj T* [(Section 1) 20 (Introduction)] TJ ET";
+    const compressed = zlib.deflateSync(Buffer.from(streamContent));
+    const header = Buffer.from("%PDF-1.4\n1 0 obj\n<< /Length 123 /Filter /FlateDecode >>\nstream\r\n");
+    const footer = Buffer.from("\r\nendstream\nendobj\n%%EOF");
+    const fullBuffer = Buffer.concat([header, compressed, footer]);
+
+    const extracted = await extractBasicPdfText(fullBuffer.buffer);
+    expect(extracted).toContain("Software Requirements Specification");
+    expect(extracted).toContain("Section 1");
+    expect(extracted).toContain("Introduction");
+  });
+
+  it("extracts text from plain uncompressed streams", async () => {
+    const streamContent = "BT (Architecture Overview) Tj ET";
+    const header = Buffer.from("%PDF-1.4\n1 0 obj\n<< /Length 123 >>\nstream\r\n");
+    const body = Buffer.from(streamContent);
+    const footer = Buffer.from("\r\nendstream\nendobj\n%%EOF");
+    const fullBuffer = Buffer.concat([header, body, footer]);
+
+    const extracted = await extractBasicPdfText(fullBuffer.buffer);
+    expect(extracted).toContain("Architecture Overview");
   });
 });

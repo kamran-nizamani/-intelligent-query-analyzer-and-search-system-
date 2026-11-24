@@ -133,7 +133,7 @@ export type SystemMetrics = {
   mrrScore: number;
 };
 
-export type AppTheme = "dark" | "light";
+export type AppTheme = "dark" | "light" | "system";
 
 export type AppSettings = {
   theme: AppTheme;

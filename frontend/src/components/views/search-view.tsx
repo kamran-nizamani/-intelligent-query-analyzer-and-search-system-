@@ -612,7 +612,11 @@ export function SearchView({
               <button
                 type="button"
                 className="btn-secondary"
-                onClick={() => onExecuteSearch(query, searchMode)}
+                onClick={() => {
+                  setTimeout(() => {
+                    onExecuteSearch(query, searchMode);
+                  }, 0);
+                }}
               >
                 Try again
               </button>
@@ -634,8 +638,12 @@ export function SearchView({
                   className="btn-secondary"
                   style={{ fontSize: 11.5 }}
                   onClick={() => {
-                    onQueryChange(sq);
-                    onExecuteSearch(sq, searchMode);
+                    startTransition(() => {
+                      onQueryChange(sq);
+                    });
+                    setTimeout(() => {
+                      onExecuteSearch(sq, searchMode);
+                    }, 0);
                   }}
                 >
                   {sq}
