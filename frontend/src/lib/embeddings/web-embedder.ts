@@ -27,7 +27,7 @@ export async function getWebEmbedder(
   }
 
   if (!extractorPromise) {
-    extractorPromise = (async () => {
+    const initialization = (async () => {
       if (typeof window === "undefined") {
         throw new Error("Web embedder is designed to run in browser environments.");
       }
@@ -57,6 +57,11 @@ export async function getWebEmbedder(
       extractorInstance = pipe as unknown as FeatureExtractor;
       return extractorInstance;
     })();
+    extractorPromise = initialization.catch((error) => {
+      // Permit retry after transient model download or initialization failures.
+      extractorPromise = null;
+      throw error;
+    });
   }
 
   return extractorPromise;
