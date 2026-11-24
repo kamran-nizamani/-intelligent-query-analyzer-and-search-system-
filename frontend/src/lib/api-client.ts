@@ -401,13 +401,21 @@ export class ApiClient {
         // 1. Extract file in browser
         const extracted = await extractFileInBrowser(file);
 
-        // 2. Upload file to Supabase Storage
+        // 2. Upload file to Supabase Storage.
+        // Supabase Storage SDK may fall back to Blob.type when the original
+        // File carries application/octet-stream. Re-wrap the bytes in a File
+        // whose actual MIME type matches the bucket allowlist.
+        const storageContentType = getStorageContentType(file);
+        const storageFile = new File([file], file.name, {
+          type: storageContentType,
+          lastModified: file.lastModified,
+        });
         const storagePath = `${user.id}/${Date.now()}_${file.name}`;
         const { error: storageError } = await supabase.storage
           .from("documents")
-          .upload(storagePath, file, {
+          .upload(storagePath, storageFile, {
             upsert: true,
-            contentType: getStorageContentType(file),
+            contentType: storageContentType,
           });
 
         if (storageError) {
