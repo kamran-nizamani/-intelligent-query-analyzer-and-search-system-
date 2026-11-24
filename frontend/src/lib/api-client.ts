@@ -347,11 +347,12 @@ export class ApiClient {
         chunk_count: number;
         status: string;
         created_at: string;
+        document_chunks?: Array<{ count: number }>;
       }
 
       const { data, error } = await supabase
         .from("documents")
-        .select("id, file_name, storage_path, file_type, content_kind, file_size, chunk_count, status, created_at")
+        .select("id, file_name, storage_path, file_type, content_kind, file_size, chunk_count, status, created_at, document_chunks(count)")
         .order("created_at", { ascending: false });
 
       if (error) throw new ApiError(`Failed to list indexed files: ${error.message}`, 500);
@@ -365,8 +366,12 @@ export class ApiClient {
         type: mapSourceType(d.file_type),
         size: formatBytes(d.file_size || 0),
         rawSize: d.file_size || 0,
-        chunks: d.chunk_count || 0,
-        status: "Indexed",
+        chunks: d.document_chunks?.[0]?.count ?? 0,
+        status:
+          (d.document_chunks?.[0]?.count ?? 0) > 0 &&
+          (d.document_chunks?.[0]?.count ?? 0) === (d.chunk_count || 0)
+            ? "Indexed"
+            : "Error",
         updated: new Date(d.created_at).toLocaleDateString(),
       }));
     }
@@ -607,7 +612,7 @@ export class ApiClient {
       }
 
       const [docsRes, chunksRes, histRes] = await Promise.all([
-        supabase.from("documents").select("content_kind"),
+        supabase.from("documents").select("content_kind, document_chunks(count)"),
         supabase.from("document_chunks").select("id", { count: "exact", head: true }),
         supabase.from("search_history").select("latency_ms, mode"),
       ]);
@@ -615,9 +620,13 @@ export class ApiClient {
       const failedQuery = [docsRes, chunksRes, histRes].find((result) => result.error);
       if (failedQuery?.error) throw new ApiError(`Failed to load analytics: ${failedQuery.error.message}`, 500);
 
-      const docs = (docsRes.data || []) as { content_kind?: string }[];
-      const totalDocuments = docs.filter((d) => d.content_kind === "document").length;
-      const totalCodeFiles = docs.filter((d) => d.content_kind === "code").length;
+      const docs = (docsRes.data || []) as {
+        content_kind?: string;
+        document_chunks?: Array<{ count: number }>;
+      }[];
+      const indexedDocs = docs.filter((d) => (d.document_chunks?.[0]?.count ?? 0) > 0);
+      const totalDocuments = indexedDocs.filter((d) => d.content_kind === "document").length;
+      const totalCodeFiles = indexedDocs.filter((d) => d.content_kind === "code").length;
       const totalChunks = chunksRes.count ?? 0;
 
       const historyData = (histRes.data || []) as { latency_ms?: number; mode?: string }[];
