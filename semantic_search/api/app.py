@@ -23,7 +23,7 @@ from semantic_search.retrieval import (
     SentenceTransformerEmbedder,
 )
 
-DATA_DIR = Path("data")
+DATA_DIR = Path(os.getenv("DATA_DIR", "data")).expanduser().resolve()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 UPLOAD_DIR = DATA_DIR / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -35,9 +35,15 @@ app = FastAPI(
     description="Real compiler-assisted hybrid retrieval backend combining SQLite FTS5 and FAISS.",
 )
 
+_cors_origins = [
+    origin.strip().rstrip("/")
+    for origin in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
