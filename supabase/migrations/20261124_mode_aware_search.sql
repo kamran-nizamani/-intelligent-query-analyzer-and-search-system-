@@ -128,7 +128,7 @@ BEGIN
            c.identifiers,
            fused.lexical_rank,
            fused.vector_rank,
-           fused.rrf_score
+           fused.rrf_score::DOUBLE PRECISION
     FROM ranked_fusion AS fused
     JOIN public.document_chunks AS c ON c.id = fused.id
     JOIN public.documents AS d ON d.id = c.document_id
