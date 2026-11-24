@@ -8,7 +8,7 @@ import type {
   SourceKind,
   SourceType,
 } from "@/types/search";
-import { getSupabaseClient, isSupabaseConfigured } from "./supabase/client";
+import { ensureAuthenticatedUser, getSupabaseClient, isSupabaseConfigured } from "./supabase/client";
 import { compileQueryTrace } from "./compiler-engine";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
@@ -348,9 +348,17 @@ export class ApiClient {
         throw new ApiError("Supabase client not initialized", null, true);
       }
 
-      const { data: { user } } = await supabase.auth.getUser();
+      let user;
+      try {
+        user = await ensureAuthenticatedUser();
+      } catch (err) {
+        throw new ApiError(
+          err instanceof Error ? err.message : "Supabase authentication failed.",
+          401
+        );
+      }
       if (!user) {
-        throw new ApiError("You must be signed in to upload documents to Supabase.", 401);
+        throw new ApiError("Supabase is configured without a valid browser client.", 401);
       }
 
       const { extractFileInBrowser } = await import("./extractors/client-extractors");
