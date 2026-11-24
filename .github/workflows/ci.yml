@@ -7,7 +7,7 @@ on:
     branches: ["**"]
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -44,12 +44,16 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+      - name: Resolve patched transitive runtime dependencies
+        run: npm install --package-lock-only --ignore-scripts
       - name: Install frontend dependencies
         run: npm ci
-      - name: Audit production dependencies
+      - name: Audit all dependencies
         run: |
-          npm audit --omit=dev --json > npm-audit.json || true
-          node -e 'const a=require("./npm-audit.json"); for (const [name,v] of Object.entries(a.vulnerabilities || {})) console.log(JSON.stringify({name,severity:v.severity,range:v.range,fixAvailable:v.fixAvailable,via:v.via})); console.log("summary", JSON.stringify(a.metadata?.vulnerabilities || {}));'
+          npm audit --json > npm-audit.json || true
+          node -e 'const a=require("./npm-audit.json"); for (const [name,v] of Object.entries(a.vulnerabilities || {})) console.log(JSON.stringify({name,severity:v.severity,range:v.range,dev:v.isDirect ? false : v.dev,fixAvailable:v.fixAvailable,via:v.via})); console.log("summary", JSON.stringify(a.metadata?.vulnerabilities || {}));'
+      - name: Verify production dependencies are clean
+        run: npm audit --omit=dev
       - name: Lint
         run: npm run lint
       - name: Type check
@@ -58,3 +62,13 @@ jobs:
         run: npm test
       - name: Production build
         run: npm run build
+      - name: Commit refreshed dependency lockfile
+        if: success()
+        run: |
+          if ! git diff --quiet -- package-lock.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add package-lock.json
+            git commit -m "chore: refresh patched frontend dependency lockfile"
+            git push
+          fi
