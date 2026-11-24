@@ -69,6 +69,26 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/** Supabase Storage rejects the browser's generic application/octet-stream type.
+ * Infer a safe MIME type from the supported extension when File.type is missing/generic.
+ */
+function getStorageContentType(file: File): string {
+  const ext = file.name.split(".").pop()?.toLowerCase() || "";
+  const mimeByExtension: Record<string, string> = {
+    pdf: "application/pdf",
+    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    txt: "text/plain",
+    py: "text/plain", java: "text/plain", js: "text/plain", jsx: "text/plain",
+    ts: "text/plain", tsx: "text/plain", c: "text/plain", cpp: "text/plain",
+    h: "text/plain", cs: "text/plain", go: "text/plain", rs: "text/plain",
+    php: "text/plain", rb: "text/plain", sql: "text/plain", html: "text/plain",
+    css: "text/plain", sh: "text/plain",
+  };
+
+  if (file.type && file.type !== "application/octet-stream") return file.type;
+  return mimeByExtension[ext] || "text/plain";
+}
+
 function mapSourceType(fileType: string): SourceType {
   const upper = fileType.toUpperCase();
   if (["PDF", "DOCX", "TXT", "PY", "JS", "JAVA"].includes(upper)) {
@@ -379,7 +399,10 @@ export class ApiClient {
         const storagePath = `${user.id}/${Date.now()}_${file.name}`;
         const { error: storageError } = await supabase.storage
           .from("documents")
-          .upload(storagePath, file, { upsert: true });
+          .upload(storagePath, file, {
+            upsert: true,
+            contentType: getStorageContentType(file),
+          });
 
         if (storageError) {
           throw new ApiError(`Storage upload failed: ${storageError.message}`);
