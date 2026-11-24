@@ -12,7 +12,7 @@ export interface EmbeddingProgress {
 }
 
 type FeatureExtractor = (
-  text: string,
+  text: string | string[],
   options?: { pooling: "mean" | "cls"; normalize: boolean }
 ) => Promise<{ data: Float32Array; dims: number[] }>;
 
@@ -95,18 +95,55 @@ export async function embedBatch(
   onProgress?: (index: number, total: number) => void
 ): Promise<number[][]> {
   const extractor = await getWebEmbedder();
-  const results: number[][] = [];
+  const results: number[][] = new Array(texts.length);
+  const batchSize = 4;
+  const dimension = 384;
 
-  for (let i = 0; i < texts.length; i++) {
-    const text = texts[i].trim();
-    if (!text) {
-      results.push(new Array(384).fill(0));
-    } else {
-      await yieldToMain();
-      const output = await extractor(text, { pooling: "mean", normalize: true });
-      results.push(Array.from(output.data));
+  for (let start = 0; start < texts.length; start += batchSize) {
+    const end = Math.min(start + batchSize, texts.length);
+    const nonEmpty: Array<{ index: number; text: string }> = [];
+
+    for (let index = start; index < end; index += 1) {
+      const text = texts[index].trim();
+      if (!text) results[index] = new Array(dimension).fill(0);
+      else nonEmpty.push({ index, text });
     }
-    onProgress?.(i + 1, texts.length);
+
+    if (nonEmpty.length > 0) {
+      await yieldToMain();
+
+      try {
+        // Transformers.js supports array inputs and returns [batch, 384] pooled
+        // embeddings. Batching reduces repeated tokenizer/runtime overhead.
+        const output = await extractor(
+          nonEmpty.map((item) => item.text),
+          { pooling: "mean", normalize: true }
+        );
+
+        if (output.data.length !== nonEmpty.length * dimension) {
+          throw new Error("Unexpected batch embedding dimensions.");
+        }
+
+        nonEmpty.forEach(({ index }, batchIndex) => {
+          const offset = batchIndex * dimension;
+          results[index] = Array.from(output.data.slice(offset, offset + dimension));
+        });
+      } catch (batchError) {
+        // Smaller devices may run out of memory on a batch. Fall back to the
+        // known single-text path rather than failing an otherwise valid upload.
+        if (nonEmpty.length === 1) throw batchError;
+        for (const item of nonEmpty) {
+          await yieldToMain();
+          const output = await extractor(item.text, { pooling: "mean", normalize: true });
+          if (output.data.length !== dimension) {
+            throw new Error("Embedding model returned an invalid vector dimension.");
+          }
+          results[item.index] = Array.from(output.data);
+        }
+      }
+    }
+
+    onProgress?.(end, texts.length);
   }
 
   return results;
