@@ -11,7 +11,7 @@ export interface EmbeddingProgress {
   file?: string;
 }
 
-type FeatureExtractor = (
+export type FeatureExtractor = (
   text: string | string[],
   options?: { pooling: "mean" | "cls"; normalize: boolean }
 ) => Promise<{ data: Float32Array; dims: number[] }>;
@@ -90,11 +90,11 @@ export async function embedText(
 /**
  * Generate 384-dimensional embeddings for a batch of texts sequentially.
  */
-export async function embedBatch(
+export async function embedBatchWithExtractor(
+  extractor: FeatureExtractor,
   texts: string[],
   onProgress?: (index: number, total: number) => void
 ): Promise<number[][]> {
-  const extractor = await getWebEmbedder();
   const results: number[][] = new Array(texts.length);
   const batchSize = 4;
   const dimension = 384;
@@ -113,13 +113,11 @@ export async function embedBatch(
       await yieldToMain();
 
       try {
-        // Transformers.js supports array inputs and returns [batch, 384] pooled
-        // embeddings. Batching reduces repeated tokenizer/runtime overhead.
+        // Transformers.js accepts an array and returns [batch, 384] pooled vectors.
         const output = await extractor(
           nonEmpty.map((item) => item.text),
           { pooling: "mean", normalize: true }
         );
-
         if (output.data.length !== nonEmpty.length * dimension) {
           throw new Error("Unexpected batch embedding dimensions.");
         }
@@ -129,8 +127,7 @@ export async function embedBatch(
           results[index] = Array.from(output.data.slice(offset, offset + dimension));
         });
       } catch (batchError) {
-        // Smaller devices may run out of memory on a batch. Fall back to the
-        // known single-text path rather than failing an otherwise valid upload.
+        // Smaller devices may run out of memory on a batch. Fall back to singles.
         if (nonEmpty.length === 1) throw batchError;
         for (const item of nonEmpty) {
           await yieldToMain();
@@ -147,4 +144,12 @@ export async function embedBatch(
   }
 
   return results;
+}
+
+export async function embedBatch(
+  texts: string[],
+  onProgress?: (index: number, total: number) => void
+): Promise<number[][]> {
+  const extractor = await getWebEmbedder();
+  return embedBatchWithExtractor(extractor, texts, onProgress);
 }
