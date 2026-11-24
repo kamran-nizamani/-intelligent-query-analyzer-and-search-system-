@@ -489,13 +489,20 @@ export class ApiClient {
         } catch (uploadError) {
           // Deleting the parent cascades to any chunks already inserted.
           const cleanupErrors: string[] = [];
+          let storageCleanupSucceeded = !storageUploaded;
           if (storageUploaded) {
             const { error } = await supabase.storage.from("documents").remove([storagePath]);
-            if (error) cleanupErrors.push(`storage rollback: ${error.message}`);
+            if (error) {
+              cleanupErrors.push(`storage rollback: ${error.message}`);
+            } else {
+              storageCleanupSucceeded = true;
+            }
           }
-          if (documentId) {
+          if (documentId && storageCleanupSucceeded) {
             const { error } = await supabase.from("documents").delete().eq("id", documentId);
             if (error) cleanupErrors.push(`document rollback: ${error.message}`);
+          } else if (documentId) {
+            cleanupErrors.push("document row retained so Storage cleanup can be retried");
           }
           const message = uploadError instanceof Error ? uploadError.message : "Unexpected upload error";
           if (cleanupErrors.length) {
