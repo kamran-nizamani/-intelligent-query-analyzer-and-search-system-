@@ -103,7 +103,7 @@ class AuthService:
     it("rejects binary-looking or empty PDF extraction instead of indexing it", () => {
       expect(() => validateExtractedPdfText("\\u0000\\u0001\\u0002%%%%%%%")).toThrow(/no readable text layer/i);
     });
-\n    it("classifies code extensions and document extensions accurately", () => {
+    it("classifies code extensions and document extensions accurately", () => {
       expect(getFileExtension("main.py")).toBe("py");
       expect(isCodeFile("main.py")).toBe(true);
       expect(isCodeFile("Service.java")).toBe(true);
