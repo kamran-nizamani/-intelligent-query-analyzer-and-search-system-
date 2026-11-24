@@ -41,9 +41,10 @@ present, Supabase mode takes precedence over the local API. Never put a
 service-role key in a `NEXT_PUBLIC_*` variable.
 
 The first semantic search or upload may be slower while the browser downloads
-and initializes the quantized `Xenova/all-MiniLM-L6-v2` model. The model is
-cached by the browser for subsequent use. Document chunk embeddings are
-generated in small batches to reduce per-chunk inference overhead.
+and initializes the `Xenova/all-MiniLM-L6-v2` model. The official Transformers.js
+v4 runtime prefers WebGPU when available and falls back to WASM; model and WASM
+assets are cached by the browser. Document chunk embeddings are generated in
+small batches to reduce per-chunk inference overhead.
 
 ## Scripts
 
