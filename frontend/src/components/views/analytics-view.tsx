@@ -197,9 +197,8 @@ export function AnalyticsView({ metrics, health }: AnalyticsViewProps) {
         </div>
         <p style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.6 }}>
           <strong style={{ color: "var(--text-main)" }}>Not measured yet.</strong> These need a labelled evaluation set
-          with known-relevant results for each query. The backend&apos;s analytics endpoint currently returns fixed
-          placeholder values for them rather than computed ones, so the interface does not display them.
-          Planned in the evaluation phase.
+          with known-relevant results for each query. No evaluation run is currently recorded, so the interface
+          intentionally does not display invented quality scores. Planned in the evaluation phase.
         </p>
       </div>
     </div>
