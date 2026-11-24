@@ -152,7 +152,7 @@ export function HistoryView({
               }}
             >
               {/* Left query info */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 260, flex: 1 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: "min(100%, 240px)", flex: 1 }}>
                 <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
                   <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text-main)", overflowWrap: "anywhere" }}>
                     &quot;{item.query}&quot;
@@ -174,7 +174,7 @@ export function HistoryView({
               </div>
 
               {/* Actions */}
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
                 <button
                   type="button"
                   onClick={() => onAnalyzeQuery(item.query)}

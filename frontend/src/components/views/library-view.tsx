@@ -219,6 +219,7 @@ export function LibraryView({
           aria-label="File category"
           style={{
             display: "flex",
+            flexWrap: "wrap",
             background: "var(--bg-card)",
             border: "1px solid var(--border-card)",
             borderRadius: "var(--radius-sm)",
