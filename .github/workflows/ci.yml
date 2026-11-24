@@ -1,4 +1,5 @@
 name: CI
+# The base branch contains this workflow so pull_request synchronize events are evaluated.
 
 on:
   push:
