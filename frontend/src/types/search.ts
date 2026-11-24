@@ -124,13 +124,13 @@ export type SystemMetrics = {
   totalChunks: number;
   totalSearches: number;
   avgLatencyMs: number;
-  ftsStatus: "Online" | "Degraded" | "Offline";
-  faissStatus: "Online" | "Degraded" | "Offline";
+  ftsStatus?: "Online" | "Degraded" | "Offline";
+  faissStatus?: "Online" | "Degraded" | "Offline";
   embeddingModel: string;
-  precisionAt1: number;
-  precisionAt5: number;
-  recallAt5: number;
-  mrrScore: number;
+  precisionAt1?: number | null;
+  precisionAt5?: number | null;
+  recallAt5?: number | null;
+  mrrScore?: number | null;
 };
 
 export type AppTheme = "dark" | "light";
