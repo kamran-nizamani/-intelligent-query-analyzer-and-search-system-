@@ -175,7 +175,12 @@ export function SearchWorkspace() {
   };
 
   const handleExecuteSearch = useCallback(
-    async (searchQuery: string, mode: SearchMode = settings.defaultSearchMode) => {
+    async (
+      searchQuery: string,
+      mode: SearchMode = settings.defaultSearchMode,
+      kind: string = "all",
+      type: string = "ALL"
+    ) => {
       const trimmed = searchQuery.trim();
       if (!trimmed) return;
       const seq = ++searchSeq.current;
@@ -187,7 +192,7 @@ export function SearchWorkspace() {
       await yieldToMain();
 
       try {
-        const response = await apiClient.search(trimmed, { mode, limit: settings.resultsPerPage });
+        const response = await apiClient.search(trimmed, { mode, limit: settings.resultsPerPage, kind, type });
         if (seq !== searchSeq.current) return; // a newer search superseded this one
         setResults(response.results);
         setLatencyMs(response.latencyMs);
