@@ -156,7 +156,7 @@ describe("SearchView states", () => {
     render(<SearchView {...searchProps({ error: "Cannot reach the backend", onExecuteSearch })} />);
     expect(screen.getByTestId("search-error")).toHaveTextContent("Cannot reach the backend");
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
-    expect(onExecuteSearch).toHaveBeenCalledWith("csv", "hybrid");
+    expect(onExecuteSearch).toHaveBeenCalledWith("csv", "hybrid", "all", "ALL");
   });
 
   it("shows the empty state when a search returned nothing", () => {
@@ -221,7 +221,7 @@ describe("SearchView states", () => {
     );
     expect(screen.getByRole("button", { name: /Keyword Only/ })).toHaveAttribute("aria-pressed", "true");
     await userEvent.click(screen.getByRole("button", { name: "Search" }));
-    expect(onExecuteSearch).toHaveBeenCalledWith("csv", "lexical");
+    expect(onExecuteSearch).toHaveBeenCalledWith("csv", "lexical", "all", "ALL");
   });
 
   it("hides the microphone when voice input is disabled in Settings", () => {
