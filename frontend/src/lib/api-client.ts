@@ -446,8 +446,8 @@ export class ApiClient {
               file_size: file.size,
               chunk_count: extracted.chunks.length,
               content_kind: extracted.contentKind,
-              // Do not advertise the file as indexed until every chunk is persisted.
-              status: "processing",
+              // The database default is "uploaded"; only set "indexed" after all chunks persist.
+              status: "uploaded",
             })
             .select("id")
             .single();
