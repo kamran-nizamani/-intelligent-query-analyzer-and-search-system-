@@ -70,15 +70,13 @@ jobs:
         if: success()
         run: |
           if ! git diff --quiet -- package-lock.json; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add package-lock.json
-            git commit -m "chore: refresh patched frontend dependency lockfile"
             branch="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
             cp package-lock.json /tmp/refreshed-package-lock.json
             git fetch origin "$branch"
             git checkout -B "$branch" FETCH_HEAD
             cp /tmp/refreshed-package-lock.json package-lock.json
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add package-lock.json
             git commit -m "chore: refresh patched frontend dependency lockfile"
             git push origin "$branch"
