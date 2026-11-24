@@ -7,9 +7,12 @@ import { compileQueryTrace } from "@/lib/compiler-engine";
 const file = (name: string, size: number) => new File([new Uint8Array(size)], name);
 
 describe("validateUploads", () => {
-  it("accepts supported, non-empty files", () => {
-    const { valid, rejected } = validateUploads([file("a.py", 10), file("B.PDF", 5), file("n.txt", 1)]);
-    expect(valid).toHaveLength(3);
+  it("accepts every advertised document and code extension", () => {
+    const supported = [".pdf", ".docx", ".txt", ".py", ".java", ".js", ".jsx"];
+    const { valid, rejected } = validateUploads(
+      supported.map((extension, index) => file(`sample-${index}${extension}`, 10))
+    );
+    expect(valid.map((item) => item.name)).toHaveLength(supported.length);
     expect(rejected).toHaveLength(0);
   });
 

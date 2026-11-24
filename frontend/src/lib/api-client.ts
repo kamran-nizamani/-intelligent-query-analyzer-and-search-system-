@@ -69,6 +69,32 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/** Always use a MIME type explicitly allowed by the Supabase documents bucket.
+ * Browser-provided File.type can be generic or differ across operating systems.
+ */
+function getStorageContentType(file: File): string {
+  const ext = file.name.split(".").pop()?.toLowerCase() || "";
+  const mimeByExtension: Record<string, string> = {
+    pdf: "application/pdf",
+    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    py: "text/x-python",
+    java: "text/x-java-source",
+    js: "application/javascript",
+    jsx: "application/javascript",
+    ts: "text/plain",
+    tsx: "text/plain",
+    txt: "text/plain",
+    c: "text/plain", cpp: "text/plain", h: "text/plain",
+    cs: "text/plain", go: "text/plain", rs: "text/plain",
+    php: "text/plain", rb: "text/plain", sql: "text/plain",
+    html: "text/plain", css: "text/plain", sh: "text/plain",
+  };
+
+  // Do not pass File.type through: it may be application/octet-stream or
+  // another browser-specific value that the Storage bucket rejects.
+  return mimeByExtension[ext] || "text/plain";
+}
+
 function mapSourceType(fileType: string): SourceType {
   const upper = fileType.toUpperCase();
   if (["PDF", "DOCX", "TXT", "PY", "JS", "JAVA"].includes(upper)) {
@@ -155,11 +181,15 @@ export class ApiClient {
       const trace = compileQueryTrace(query);
       const plan = trace.optimizedIr;
 
-      const { embedText } = await import("./embeddings/web-embedder");
-      const embedding = await embedText(plan.semanticQuery || query);
+      // Generate dense vectors only when the selected mode needs semantic retrieval.
+      const searchMode = options.mode || "hybrid";
+      const embedding =
+        searchMode === "lexical"
+          ? null
+          : await (await import("./embeddings/web-embedder")).embedText(plan.semanticQuery || query);
 
       interface SupabaseChunkRow {
-        chunk_id: number;
+        chunk_id: string;
         document_id: string;
         file_name: string;
         storage_path: string;
@@ -178,13 +208,14 @@ export class ApiClient {
         rrf_score: number;
       }
 
-      const { data, error } = await supabase.rpc("hybrid_search_rrf", {
+      const { data, error } = await supabase.rpc("search_chunks_v2", {
         query_text: plan.lexicalQuery || query,
         query_embedding: embedding,
         match_limit: options.limit || plan.limit || 10,
         filter_kind: (plan.filters.content_kind as string) || null,
         filter_language: (plan.filters.language as string) || null,
         filter_symbol: (plan.filters.symbol_kind as string) || null,
+        search_mode: searchMode,
         rrf_k: 60,
       });
 
@@ -370,11 +401,22 @@ export class ApiClient {
         // 1. Extract file in browser
         const extracted = await extractFileInBrowser(file);
 
-        // 2. Upload file to Supabase Storage
+        // 2. Upload file to Supabase Storage.
+        // Supabase Storage SDK may fall back to Blob.type when the original
+        // File carries application/octet-stream. Re-wrap the bytes in a File
+        // whose actual MIME type matches the bucket allowlist.
+        const storageContentType = getStorageContentType(file);
+        const storageFile = new File([file], file.name, {
+          type: storageContentType,
+          lastModified: file.lastModified,
+        });
         const storagePath = `${user.id}/${Date.now()}_${file.name}`;
         const { error: storageError } = await supabase.storage
           .from("documents")
-          .upload(storagePath, file, { upsert: true });
+          .upload(storagePath, storageFile, {
+            upsert: true,
+            contentType: storageContentType,
+          });
 
         if (storageError) {
           throw new ApiError(`Storage upload failed: ${storageError.message}`);

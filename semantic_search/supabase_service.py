@@ -46,12 +46,51 @@ class SupabaseService:
 
     # --- Storage Operations ---
 
+    @staticmethod
+    def _storage_content_type(file_name: str, content_type: Optional[str] = None) -> str:
+        """Return a MIME type allowed by the configured documents bucket.
+
+        Never forward application/octet-stream from browsers or multipart uploads.
+        """
+        ext = file_name.rsplit(".", 1)[-1].lower() if "." in file_name else ""
+        allowed_by_extension = {
+            "pdf": "application/pdf",
+            "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "py": "text/x-python",
+            "java": "text/x-java-source",
+            "js": "application/javascript",
+            "jsx": "application/javascript",
+            "txt": "text/plain",
+            "ts": "text/plain",
+            "tsx": "text/plain",
+            "c": "text/plain",
+            "cpp": "text/plain",
+            "h": "text/plain",
+            "cs": "text/plain",
+            "go": "text/plain",
+            "rs": "text/plain",
+            "php": "text/plain",
+            "rb": "text/plain",
+            "sql": "text/plain",
+            "html": "text/plain",
+            "css": "text/plain",
+            "sh": "text/plain",
+        }
+        inferred = allowed_by_extension.get(ext, "text/plain")
+        if not content_type or content_type == "application/octet-stream":
+            return inferred
+        # Keep the extension-derived value authoritative so Storage allowlist
+        # behavior is consistent regardless of client/browser MIME detection.
+        return inferred
+
     def upload_file_to_storage(
-        self, file_name: str, file_bytes: bytes, content_type: str = "application/octet-stream"
+        self, file_name: str, file_bytes: bytes, content_type: Optional[str] = None
     ) -> Optional[str]:
         """Upload a file to Supabase Storage bucket. Returns storage path if successful."""
         if not self.is_configured:
             return None
+
+        content_type = self._storage_content_type(file_name, content_type)
 
         # Sanitize filename for storage path
         safe_name = urllib.parse.quote(file_name)

@@ -5,7 +5,7 @@ import {
   splitIdentifier,
   searchableCode,
 } from "@/lib/chunking/chunker";
-import { getFileExtension, isCodeFile } from "@/lib/extractors/client-extractors";
+import { getFileExtension, isCodeFile, validateExtractedPdfText } from "@/lib/extractors/client-extractors";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { tokenizeQuery, parseTokens, compileQueryTrace } from "@/lib/compiler-engine";
 
@@ -31,6 +31,12 @@ describe("Supabase-Only Migration Unit Tests", () => {
       expect(ast.language).toBe("python");
       expect(ast.topic).toBe('"csv reader"');
       expect(ast.limit).toBe(5);
+    });
+
+    it("keeps method searches distinct from function searches", () => {
+      const methodTrace = compileQueryTrace("find Python methods that validate tokens");
+      expect(methodTrace.ast.target).toBe("method");
+      expect(methodTrace.optimizedIr.filters.symbol_kind).toBe("method");
     });
 
     it("compiles query into 7-stage explanation trace without network calls", () => {
@@ -88,7 +94,16 @@ class AuthService:
   });
 
   describe("File Extension Classification", () => {
-    it("classifies code extensions and document extensions accurately", () => {
+
+    it("accepts readable PDF text extracted by PDF.js", () => {
+      const text = "Compiler-assisted hybrid search combines lexical retrieval with semantic vector search.";
+      expect(validateExtractedPdfText(text)).toBe(text);
+    });
+
+    it("rejects binary-looking or empty PDF extraction instead of indexing it", () => {
+      expect(() => validateExtractedPdfText("\\u0000\\u0001\\u0002%%%%%%%")).toThrow(/no readable text layer/i);
+    });
+\n    it("classifies code extensions and document extensions accurately", () => {
       expect(getFileExtension("main.py")).toBe("py");
       expect(isCodeFile("main.py")).toBe(true);
       expect(isCodeFile("Service.java")).toBe(true);
