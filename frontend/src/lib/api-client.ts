@@ -351,9 +351,8 @@ export class ApiClient {
         .select("id, file_name, storage_path, file_type, content_kind, file_size, chunk_count, status, created_at")
         .order("created_at", { ascending: false });
 
-      if (error || !data) {
-        return [];
-      }
+      if (error) throw new ApiError(`Failed to list indexed files: ${error.message}`, 500);
+      if (!data) return [];
 
       return (data as DocumentRow[]).map((d) => ({
         id: d.id,
@@ -410,73 +409,88 @@ export class ApiClient {
           type: storageContentType,
           lastModified: file.lastModified,
         });
-        const storagePath = `${user.id}/${Date.now()}_${file.name}`;
-        const { error: storageError } = await supabase.storage
-          .from("documents")
-          .upload(storagePath, storageFile, {
-            upsert: true,
-            contentType: storageContentType,
-          });
+        const storagePath = `${user.id}/${crypto.randomUUID()}_${file.name}`;
+        let storageUploaded = false;
+        let documentId: string | null = null;
 
-        if (storageError) {
-          throw new ApiError(`Storage upload failed: ${storageError.message}`);
-        }
+        try {
+          const { error: storageError } = await supabase.storage
+            .from("documents")
+            .upload(storagePath, storageFile, {
+              upsert: false,
+              contentType: storageContentType,
+            });
+          if (storageError) throw new ApiError(`Storage upload failed: ${storageError.message}`);
+          storageUploaded = true;
 
-        // 3. Insert document record
-        const { data: docRecord, error: docError } = await supabase
-          .from("documents")
-          .insert({
-            user_id: user.id,
-            file_name: file.name,
-            storage_path: storagePath,
-            file_type: extracted.fileType,
-            file_size: file.size,
-            chunk_count: extracted.chunks.length,
-            content_kind: extracted.contentKind,
-            status: "indexed",
-          })
-          .select("id")
-          .single();
-
-        if (docError || !docRecord) {
-          throw new ApiError(`Document database record creation failed: ${docError?.message}`);
-        }
-
-        // 4. Compute embeddings for chunks
-        const chunkTexts = extracted.chunks.map((c) => c.chunkText);
-        const embeddings = await embedBatch(chunkTexts);
-
-        // 5. Bulk insert document chunks
-        const chunkRows = extracted.chunks.map((chunk, idx) => ({
-          document_id: docRecord.id,
-          user_id: user.id,
-          // The deployed document_chunks schema requires a zero-based chunk index
-          // and the source file path for every chunk.
-          chunk_index: idx,
-          file_path: storagePath,
-          chunk_text: chunk.chunkText,
-          source_kind: chunk.sourceKind,
-          page_number: chunk.pageNumber ?? null,
-          line_start: chunk.lineStart ?? null,
-          line_end: chunk.lineEnd ?? null,
-          symbol_name: chunk.symbolName ?? null,
-          symbol_kind: chunk.symbolKind ?? null,
-          language: chunk.language ?? null,
-          identifiers: chunk.identifiers ?? [],
-          embedding: embeddings[idx],
-        }));
-
-        if (chunkRows.length > 0) {
-          const { error: chunkError } = await supabase
-            .from("document_chunks")
-            .insert(chunkRows);
-
-          if (chunkError) {
-            throw new ApiError(`Chunk insertion failed: ${chunkError.message}`);
+          // Create the parent row before chunks; any later failure rolls back both.
+          const { data: docRecord, error: docError } = await supabase
+            .from("documents")
+            .insert({
+              user_id: user.id,
+              file_name: file.name,
+              storage_path: storagePath,
+              file_type: extracted.fileType,
+              file_size: file.size,
+              chunk_count: extracted.chunks.length,
+              content_kind: extracted.contentKind,
+              status: "indexed",
+            })
+            .select("id")
+            .single();
+          if (docError || !docRecord) {
+            throw new ApiError(`Document database record creation failed: ${docError?.message || "No document row was returned"}`);
           }
-        }
+          documentId = docRecord.id;
 
-        uploadedResults.push({ id: docRecord.id, name: file.name, chunks: chunkRows.length });
+          const chunkTexts = extracted.chunks.map((c) => c.chunkText);
+          const embeddings = await embedBatch(chunkTexts);
+          if (embeddings.length !== extracted.chunks.length || embeddings.some((v) => v.length !== 384 || v.some((n) => !Number.isFinite(n)))) {
+            throw new ApiError("Embedding generation returned invalid vectors; expected one finite 384-dimensional vector per chunk.");
+          }
+
+          const chunkRows = extracted.chunks.map((chunk, idx) => ({
+            document_id: docRecord.id,
+            user_id: user.id,
+            chunk_index: idx,
+            file_path: storagePath,
+            chunk_text: chunk.chunkText,
+            source_kind: chunk.sourceKind,
+            page_number: chunk.pageNumber ?? null,
+            line_start: chunk.lineStart ?? null,
+            line_end: chunk.lineEnd ?? null,
+            symbol_name: chunk.symbolName ?? null,
+            symbol_kind: chunk.symbolKind ?? null,
+            language: chunk.language ?? null,
+            identifiers: chunk.identifiers ?? [],
+            embedding: embeddings[idx],
+          }));
+
+          if (chunkRows.length > 0) {
+            const { error: chunkError } = await supabase
+              .from("document_chunks")
+              .insert(chunkRows);
+            if (chunkError) throw new ApiError(`Chunk insertion failed: ${chunkError.message}`);
+          }
+
+          uploadedResults.push({ id: docRecord.id, name: file.name, chunks: chunkRows.length });
+        } catch (uploadError) {
+          // Deleting the parent cascades to any chunks already inserted.
+          const cleanupErrors: string[] = [];
+          if (documentId) {
+            const { error } = await supabase.from("documents").delete().eq("id", documentId);
+            if (error) cleanupErrors.push(`document rollback: ${error.message}`);
+          }
+          if (storageUploaded) {
+            const { error } = await supabase.storage.from("documents").remove([storagePath]);
+            if (error) cleanupErrors.push(`storage rollback: ${error.message}`);
+          }
+          const message = uploadError instanceof Error ? uploadError.message : "Unexpected upload error";
+          if (cleanupErrors.length) {
+            throw new ApiError(`${message}. Cleanup also failed (${cleanupErrors.join("; ")}); inspect this file's index state.`);
+          }
+          throw uploadError;
+        }
       }
 
       return { uploaded: uploadedResults, totalFilesIndexed: uploadedResults.length };
@@ -499,11 +513,25 @@ export class ApiClient {
         throw new ApiError("Supabase client not initialized", null, true);
       }
 
-      const { error } = await supabase.from("documents").delete().eq("id", fileId);
-      if (error) {
-        throw new ApiError(`Failed to delete document: ${error.message}`);
+      const { data: document, error: lookupError } = await supabase
+        .from("documents")
+        .select("storage_path")
+        .eq("id", fileId)
+        .single();
+      if (lookupError || !document) {
+        throw new ApiError(`Failed to find document for deletion: ${lookupError?.message || "Document not found"}`, 404);
       }
 
+      // Keep the index row if object cleanup fails so deletion can be retried.
+      const { error: storageError } = await supabase.storage
+        .from("documents")
+        .remove([document.storage_path]);
+      if (storageError) throw new ApiError(`Failed to remove stored file: ${storageError.message}`);
+
+      const { error: deleteError } = await supabase.from("documents").delete().eq("id", fileId);
+      if (deleteError) {
+        throw new ApiError(`Stored file removed, but document index deletion failed: ${deleteError.message}`);
+      }
       return { deleted: fileId, status: "success" };
     }
 
@@ -535,7 +563,8 @@ export class ApiClient {
         .order("created_at", { ascending: false })
         .limit(50);
 
-      if (error || !data) return [];
+      if (error) throw new ApiError(`Failed to fetch search history: ${error.message}`, 500);
+      if (!data) return [];
 
       return (data as HistoryRow[]).map((row) => ({
         id: row.id,
@@ -558,9 +587,9 @@ export class ApiClient {
       if (!supabase) return { cleared: false };
 
       const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.from("search_history").delete().eq("user_id", user.id);
-      }
+      if (!user) throw new ApiError("No authenticated user session.", 401);
+      const { error } = await supabase.from("search_history").delete().eq("user_id", user.id);
+      if (error) throw new ApiError(`Failed to clear search history: ${error.message}`, 500);
       return { cleared: true };
     }
 
@@ -579,6 +608,9 @@ export class ApiClient {
         supabase.from("document_chunks").select("id", { count: "exact", head: true }),
         supabase.from("search_history").select("latency_ms, mode"),
       ]);
+
+      const failedQuery = [docsRes, chunksRes, histRes].find((result) => result.error);
+      if (failedQuery?.error) throw new ApiError(`Failed to load analytics: ${failedQuery.error.message}`, 500);
 
       const docs = (docsRes.data || []) as { content_kind?: string }[];
       const totalDocuments = docs.filter((d) => d.content_kind === "document").length;
