@@ -1,9 +1,22 @@
--- Search execution v2: honor the selected retrieval mode instead of always running hybrid.
--- SECURITY INVOKER is intentional: document_chunks RLS remains enforced for the caller.
+-- Mode-aware search for the live Supabase schema.
+-- The existing project uses TEXT identifiers and stores pgvector in extensions.
+-- Keep SECURITY INVOKER so the caller's document_chunks/documents RLS policies apply.
 
-CREATE OR REPLACE FUNCTION public.search_chunks_v2(
+ALTER TABLE public.document_chunks
+    ADD COLUMN IF NOT EXISTS fts TSVECTOR
+    GENERATED ALWAYS AS (to_tsvector('english', chunk_text)) STORED;
+
+CREATE INDEX IF NOT EXISTS idx_chunks_fts_v2
+    ON public.document_chunks USING GIN (fts);
+
+-- The earlier draft used UUID/BIGINT return types, but this project's IDs are TEXT.
+DROP FUNCTION IF EXISTS public.search_chunks_v2(
+    TEXT, extensions.vector, INTEGER, TEXT, TEXT, TEXT, TEXT, INTEGER
+);
+
+CREATE FUNCTION public.search_chunks_v2(
     query_text TEXT,
-    query_embedding VECTOR(384),
+    query_embedding extensions.vector(384),
     match_limit INTEGER DEFAULT 10,
     filter_kind TEXT DEFAULT NULL,
     filter_language TEXT DEFAULT NULL,
@@ -12,8 +25,8 @@ CREATE OR REPLACE FUNCTION public.search_chunks_v2(
     rrf_k INTEGER DEFAULT 60
 )
 RETURNS TABLE (
-    chunk_id BIGINT,
-    document_id UUID,
+    chunk_id TEXT,
+    document_id TEXT,
     file_name TEXT,
     storage_path TEXT,
     file_type TEXT,
@@ -32,7 +45,7 @@ RETURNS TABLE (
 )
 LANGUAGE plpgsql
 SECURITY INVOKER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 BEGIN
     IF search_mode NOT IN ('hybrid', 'semantic', 'lexical') THEN
@@ -99,8 +112,8 @@ BEGIN
         LEFT JOIN lexical_candidates AS lexical ON lexical.id = ids.id
         LEFT JOIN vector_candidates AS semantic ON semantic.id = ids.id
     )
-    SELECT c.id,
-           c.document_id,
+    SELECT c.id::TEXT,
+           c.document_id::TEXT,
            d.file_name,
            d.storage_path,
            d.file_type,
@@ -124,5 +137,5 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION public.search_chunks_v2(TEXT, VECTOR, INTEGER, TEXT, TEXT, TEXT, TEXT, INTEGER)
-IS 'Mode-aware lexical, semantic, and hybrid search using RRF; caller RLS is enforced.';
+COMMENT ON FUNCTION public.search_chunks_v2(TEXT, extensions.vector, INTEGER, TEXT, TEXT, TEXT, TEXT, INTEGER)
+IS 'Mode-aware lexical, semantic, and hybrid search; respects caller RLS.';
