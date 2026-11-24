@@ -46,6 +46,10 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install frontend dependencies
         run: npm ci
+      - name: Audit production dependencies
+        run: |
+          npm audit --omit=dev --json > npm-audit.json || true
+          node -e 'const a=require("./npm-audit.json"); for (const [name,v] of Object.entries(a.vulnerabilities || {})) console.log(JSON.stringify({name,severity:v.severity,range:v.range,fixAvailable:v.fixAvailable,via:v.via})); console.log("summary", JSON.stringify(a.metadata?.vulnerabilities || {}));'
       - name: Lint
         run: npm run lint
       - name: Type check
