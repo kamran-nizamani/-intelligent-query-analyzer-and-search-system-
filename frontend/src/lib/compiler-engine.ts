@@ -305,7 +305,7 @@ export function compileQueryTrace(sourceQuery: string): CompilerTrace {
       durationMs: 0.2,
       summary: "Constructs a type-safe Abstract Syntax Tree node (QueryAST).",
       details:
-        "Packages parsed query attributes into an immutable QueryAST dataclass instance containing action, target, language, topic, limit, and source text.",
+        "Packages parsed query attributes into an immutable typed TypeScript QueryAST object containing action, target, language, topic, limit, and source text.",
       inputPreview: "Validated syntax grammar",
       outputPreview: `QueryAST(action="${rawAst.action}", target=${rawAst.target ? `"${rawAst.target}"` : "null"}, topic="${rawAst.topic}")`,
       rawOutput: rawAst,
@@ -318,7 +318,7 @@ export function compileQueryTrace(sourceQuery: string): CompilerTrace {
       durationMs: Math.max(0.3, tSemantic),
       summary: "Enforces semantic invariants, symbol resolution, and vocabulary checks.",
       details:
-        "Verifies that requested language and target combinations are coherent (e.g. checks that documents do not conflict with programming languages) and validates topic searchability against indexed vocabulary.",
+        "Verifies that requested language and target combinations are coherent (e.g. checks that documents do not conflict with programming languages) and does not inspect the live index or guarantee that the topic has matching documents.",
       inputPreview: "QueryAST dataclass",
       outputPreview: `Status: ${semantic.valid ? "Valid" : "Invalid"} | Warnings: ${semantic.warnings.length} | Target: ${semantic.targetResolved ?? "broad"}`,
       rawOutput: semantic,
@@ -331,7 +331,7 @@ export function compileQueryTrace(sourceQuery: string): CompilerTrace {
       durationMs: Math.max(0.3, tIr),
       summary: "Emits engine-independent QueryIR with execution plan and filters.",
       details:
-        "Translates semantic AST into formal QueryIR dataclass specifying the operation ('HYBRID_SEARCH'), concrete metadata filters (content_kind, symbol_kind, language), dual lexical & semantic query strings, and fusion strategy ('rrf').",
+        "Translates semantic AST into formal typed QueryIR object specifying the operation ('HYBRID_SEARCH'), concrete metadata filters (content_kind, symbol_kind, language), dual lexical & semantic query strings, and fusion strategy ('rrf').",
       inputPreview: "Semantically validated QueryAST",
       outputPreview: `QueryIR(op="${ir.operation}", filters=${JSON.stringify(ir.filters)}, fusion="${ir.fusion}")`,
       rawOutput: ir,
@@ -351,16 +351,16 @@ export function compileQueryTrace(sourceQuery: string): CompilerTrace {
     },
     {
       id: "stage-7",
-      name: "7. Hybrid Search (RRF Execution)",
+      name: "7. Retrieval Request Preparation",
       category: "retrieval",
-      status: "completed",
-      durationMs: 14.8,
-      summary: "Executes parallel FTS5 BM25 + FAISS Vector search fused with RRF.",
+      status: "ready",
+      durationMs: 0,
+      summary: "Prepares the search request; database execution occurs after compilation.",
       details:
-        "Dispatches dual queries: 1) Lexical SQLite FTS5 for exact keyword/symbol matching, and 2) FAISS 384-D Sentence-Transformer (MiniLM) for dense vector semantic similarity. Combines ranks using Reciprocal Rank Fusion (k=60).",
+        "The hosted workspace sends this plan to PostgreSQL full-text search and pgvector, then combines candidate ranks with Reciprocal Rank Fusion (RRF, k=60). This trace does not measure or claim database execution time.",
       inputPreview: `Lexical: "${optimizedIr.lexicalQuery}" | Semantic: "${optimizedIr.semanticQuery}" | RRF k=60`,
-      outputPreview: "Dual-ranked candidate list fused and scored",
-      rawOutput: { fusion: "rrf", k: 60, indexes: ["sqlite_fts5", "faiss_flat_ip"] },
+      outputPreview: "Optimized retrieval request prepared; execution pending",
+      rawOutput: { fusion: "rrf", k: 60, backend: "PostgreSQL FTS + pgvector" },
     },
   ];
 
