@@ -408,6 +408,10 @@ export class ApiClient {
         const chunkRows = extracted.chunks.map((chunk, idx) => ({
           document_id: docRecord.id,
           user_id: user.id,
+          // The deployed document_chunks schema requires a zero-based chunk index
+          // and the source file path for every chunk.
+          chunk_index: idx,
+          file_path: storagePath,
           chunk_text: chunk.chunkText,
           source_kind: chunk.sourceKind,
           page_number: chunk.pageNumber ?? null,
