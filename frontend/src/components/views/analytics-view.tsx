@@ -171,9 +171,9 @@ export function AnalyticsView({ metrics, health }: AnalyticsViewProps) {
               <dt>Status</dt>
               <dd style={{ color: "var(--success)" }}>● {health.status}</dd>
               <dt>Lexical engine</dt>
-              <dd>{health.fts_engine ?? "SQLite FTS5"}</dd>
+              <dd>{health.fts_engine ?? "PostgreSQL full-text search"}</dd>
               <dt>Vector engine</dt>
-              <dd>{health.vector_engine ?? "FAISS"}</dd>
+              <dd>{health.vector_engine ?? "pgvector"}</dd>
               <dt>Embedding model</dt>
               <dd>{health.embedding_model}</dd>
               <dt>Chunks indexed</dt>
