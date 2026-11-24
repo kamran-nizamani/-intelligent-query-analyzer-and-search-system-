@@ -335,7 +335,7 @@ export class ApiClient {
   async listFiles(): Promise<IndexedFile[]> {
     if (isSupabaseConfigured()) {
       const supabase = getSupabaseClient();
-      if (!supabase) return [];
+      if (!supabase) throw new ApiError("Supabase client not initialized", null, true);
 
       interface DocumentRow {
         id: string;
@@ -553,7 +553,7 @@ export class ApiClient {
   async getHistory(): Promise<SearchHistoryEntry[]> {
     if (isSupabaseConfigured()) {
       const supabase = getSupabaseClient();
-      if (!supabase) return [];
+      if (!supabase) throw new ApiError("Supabase client not initialized", null, true);
 
       interface HistoryRow {
         id: string;
@@ -592,7 +592,7 @@ export class ApiClient {
   async clearHistory(): Promise<{ cleared: boolean }> {
     if (isSupabaseConfigured()) {
       const supabase = getSupabaseClient();
-      if (!supabase) return { cleared: false };
+      if (!supabase) throw new ApiError("Supabase client not initialized", null, true);
 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new ApiError("No authenticated user session.", 401);
