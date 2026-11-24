@@ -1,3 +1,4 @@
+import type { User } from "@supabase/supabase-js";
 import type {
   CompilerTrace,
   IndexedFile,
@@ -8,12 +9,11 @@ import type {
   SourceKind,
   SourceType,
 } from "@/types/search";
-import { ensureAuthenticatedUser, getSupabaseClient, isSupabaseConfigured } from "./supabase/client";
+import { getSupabaseClient, isSupabaseConfigured } from "./supabase/client";
 import { compileQueryTrace } from "./compiler-engine";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
-const DEFAULT_TIMEOUT_MS = 15_000;
-const UPLOAD_TIMEOUT_MS = 120_000;
+let anonymousSignInPromise: Promise<User> | null = null;
+
 
 export type HealthResponse = {
   status: string;
@@ -54,15 +54,6 @@ export class ApiError extends Error {
   }
 }
 
-function describeDetail(detail: unknown, fallback: string): string {
-  if (typeof detail === "string" && detail) return detail;
-  if (Array.isArray(detail) && detail.length > 0) {
-    const first = detail[0] as { msg?: string };
-    if (first?.msg) return first.msg;
-  }
-  return fallback;
-}
-
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -79,41 +70,36 @@ function mapSourceType(fileType: string): SourceType {
 }
 
 export class ApiClient {
-  private baseUrl: string;
-
-  constructor(baseUrl: string = API_BASE) {
-    this.baseUrl = baseUrl;
+  private async request<T>(): Promise<T> {
+    throw new ApiError(
+      "Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY in your Vercel project.",
+      null,
+      true
+    );
   }
 
-  private async request<T>(
-    path: string,
-    init: RequestInit = {},
-    fallbackMessage = "Request failed",
-    timeoutMs = DEFAULT_TIMEOUT_MS
-  ): Promise<T> {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    let res: Response;
-    try {
-      res = await fetch(`${this.baseUrl}${path}`, { ...init, signal: controller.signal });
-    } catch (err) {
-      const timedOut = (err as Error)?.name === "AbortError";
-      throw new ApiError(
-        timedOut
-          ? "The server took too long to respond."
-          : `Cannot reach the backend at ${this.baseUrl}. Is the API server running?`,
-        null,
-        true
-      );
-    } finally {
-      clearTimeout(timer);
-    }
+  private async ensureUserSession(supabase: NonNullable<ReturnType<typeof getSupabaseClient>>) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (sessionData?.session?.user) return sessionData.session.user;
 
-    if (!res.ok) {
-      const body = await res.json().catch(() => null);
-      throw new ApiError(describeDetail(body?.detail, fallbackMessage), res.status);
+    const { data: current } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
+    if (current?.user) return current.user;
+
+    if (!anonymousSignInPromise) {
+      anonymousSignInPromise = (async () => {
+        const { data, error } = await supabase.auth.signInAnonymously();
+        if (error || !data?.user) {
+          throw new ApiError(
+            `Anonymous sign-in is required for this app. Enable Anonymous Sign-Ins in Supabase Authentication settings (Authentication > Providers > Anonymous). ${error?.message || ""}`.trim(),
+            401
+          );
+        }
+        return data.user;
+      })().finally(() => {
+        anonymousSignInPromise = null;
+      });
     }
-    return res.json() as Promise<T>;
+    return anonymousSignInPromise;
   }
 
   async checkHealth(): Promise<HealthResponse> {
@@ -123,6 +109,7 @@ export class ApiClient {
         throw new ApiError("Supabase client failed to initialize", null, true);
       }
 
+      await this.ensureUserSession(supabase);
       const { count, error } = await supabase
         .from("document_chunks")
         .select("id", { count: "exact", head: true });
@@ -136,12 +123,12 @@ export class ApiClient {
         database: "Supabase PostgreSQL 15+ (pgvector)",
         chunk_count: count ?? 0,
         embedding_model: "Xenova/all-MiniLM-L6-v2 (Client ONNX 384-D)",
-        fts_engine: "PostgreSQL tsvector (GIN Index)",
-        vector_engine: "pgvector HNSW (Cosine ops)",
+        fts_engine: "PostgreSQL full-text search (GIN)",
+        vector_engine: "pgvector HNSW (cosine distance)",
       };
     }
 
-    return this.request<HealthResponse>("/api/health", {}, "Backend server unhealthy", 5_000);
+    return this.request<HealthResponse>();
   }
 
   async search(query: string, options: SearchOptions = {}): Promise<SearchResponse> {
@@ -151,15 +138,17 @@ export class ApiClient {
         throw new ApiError("Supabase client not initialized", null, true);
       }
 
+      const user = await this.ensureUserSession(supabase);
       const t0 = performance.now();
       const trace = compileQueryTrace(query);
       const plan = trace.optimizedIr;
 
-      const { embedText } = await import("./embeddings/web-embedder");
-      const embedding = await embedText(plan.semanticQuery || query);
+      const embedding = options.mode === "lexical"
+        ? null
+        : await (await import("./embeddings/web-embedder")).embedText(plan.semanticQuery || query);
 
       interface SupabaseChunkRow {
-        chunk_id: number;
+        chunk_id: string;
         document_id: string;
         file_name: string;
         storage_path: string;
@@ -178,15 +167,38 @@ export class ApiClient {
         rrf_score: number;
       }
 
-      const { data, error } = await supabase.rpc("hybrid_search_rrf", {
+      const rpcKind = options.kind && options.kind !== "all" ? options.kind : null;
+      const rpcLang = (plan.filters.language as string) || null;
+      const rpcSymbol = (plan.filters.symbol_kind as string) || null;
+
+      const { data: initialData, error } = await supabase.rpc("hybrid_search_rrf", {
         query_text: plan.lexicalQuery || query,
         query_embedding: embedding,
         match_limit: options.limit || plan.limit || 10,
-        filter_kind: (plan.filters.content_kind as string) || null,
-        filter_language: (plan.filters.language as string) || null,
-        filter_symbol: (plan.filters.symbol_kind as string) || null,
+        filter_kind: rpcKind,
+        filter_language: rpcLang,
+        filter_symbol: rpcSymbol,
         rrf_k: 60,
+        search_mode: options.mode || "hybrid",
       });
+      let data = initialData;
+
+      // Search fallback: if narrow compiler filters produced 0 results, retry without language/symbol filters
+      if (!error && (!data || (data as unknown[]).length === 0) && (rpcLang || rpcSymbol)) {
+        const fallbackRes = await supabase.rpc("hybrid_search_rrf", {
+          query_text: query,
+          query_embedding: embedding,
+          match_limit: options.limit || plan.limit || 10,
+          filter_kind: rpcKind,
+          filter_language: null,
+          filter_symbol: null,
+          rrf_k: 60,
+          search_mode: options.mode || "hybrid",
+        });
+        if (!fallbackRes.error && fallbackRes.data && (fallbackRes.data as unknown[]).length > 0) {
+          data = fallbackRes.data;
+        }
+      }
 
       if (error) {
         throw new ApiError(`Search query execution failed: ${error.message}`, 500);
@@ -243,9 +255,8 @@ export class ApiClient {
       });
 
       // Record to search_history in background
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user?.id) {
-        void supabase.from("search_history").insert({
+      if (user.id) {
+        const { error: historyError } = await supabase.from("search_history").insert({
           user_id: user.id,
           query_text: query,
           mode: options.mode || "hybrid",
@@ -253,6 +264,9 @@ export class ApiClient {
           latency_ms: latencyMs,
           filters: plan.filters,
         });
+        if (historyError) {
+          throw new ApiError(`Search succeeded but history could not be saved: ${historyError.message}`);
+        }
       }
 
       return {
@@ -263,45 +277,18 @@ export class ApiClient {
       };
     }
 
-    return this.request<SearchResponse>(
-      "/api/search",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          query,
-          mode: options.mode || "hybrid",
-          kind: options.kind || "all",
-          type: options.type || "ALL",
-          limit: options.limit || 10,
-        }),
-      },
-      "Search request failed",
-      60_000
-    );
+    return this.request<SearchResponse>();
   }
 
   explain(query: string): Promise<CompilerTrace> {
-    if (isSupabaseConfigured()) {
-      // Client-side execution produces instant, zero-latency 7-stage explanation
-      return Promise.resolve(compileQueryTrace(query));
-    }
-
-    return this.request<CompilerTrace>(
-      "/api/compiler/explain",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query }),
-      },
-      "Compiler explanation failed"
-    );
+    // The TypeScript compiler runs locally; no API server is required.
+    return Promise.resolve(compileQueryTrace(query));
   }
 
   async listFiles(): Promise<IndexedFile[]> {
     if (isSupabaseConfigured()) {
       const supabase = getSupabaseClient();
-      if (!supabase) return [];
+      if (!supabase) throw new ApiError("Supabase client failed to initialize", null, true);
 
       interface DocumentRow {
         id: string;
@@ -315,14 +302,14 @@ export class ApiClient {
         created_at: string;
       }
 
+      await this.ensureUserSession(supabase);
       const { data, error } = await supabase
         .from("documents")
         .select("id, file_name, storage_path, file_type, content_kind, file_size, chunk_count, status, created_at")
         .order("created_at", { ascending: false });
 
-      if (error || !data) {
-        return [];
-      }
+      if (error) throw new ApiError(`Failed to list indexed files: ${error.message}`);
+      if (!data) return [];
 
       return (data as DocumentRow[]).map((d) => ({
         id: d.id,
@@ -338,7 +325,7 @@ export class ApiClient {
       }));
     }
 
-    return this.request<IndexedFile[]>("/api/files", {}, "Failed to list indexed files");
+    return this.request<IndexedFile[]>();
   }
 
   async uploadFiles(files: File[]): Promise<{ uploaded: unknown[]; totalFilesIndexed: number }> {
@@ -348,18 +335,7 @@ export class ApiClient {
         throw new ApiError("Supabase client not initialized", null, true);
       }
 
-      let user;
-      try {
-        user = await ensureAuthenticatedUser();
-      } catch (err) {
-        throw new ApiError(
-          err instanceof Error ? err.message : "Supabase authentication failed.",
-          401
-        );
-      }
-      if (!user) {
-        throw new ApiError("Supabase is configured without a valid browser client.", 401);
-      }
+      const user = await this.ensureUserSession(supabase);
 
       const { extractFileInBrowser } = await import("./extractors/client-extractors");
       const { embedBatch } = await import("./embeddings/web-embedder");
@@ -369,6 +345,11 @@ export class ApiClient {
       for (const file of files) {
         // 1. Extract file in browser
         const extracted = await extractFileInBrowser(file);
+        if (!extracted.chunks || extracted.chunks.length === 0) {
+          throw new ApiError(
+            `No searchable text or code chunks could be extracted from "${file.name}". Please ensure the file is not empty or password-protected.`
+          );
+        }
 
         // 2. Upload file to Supabase Storage
         const storagePath = `${user.id}/${Date.now()}_${file.name}`;
@@ -391,40 +372,43 @@ export class ApiClient {
             file_size: file.size,
             chunk_count: extracted.chunks.length,
             content_kind: extracted.contentKind,
-            status: "indexed",
+            status: "processing",
           })
           .select("id")
           .single();
 
         if (docError || !docRecord) {
+          try {
+            await supabase.storage.from("documents").remove([storagePath]);
+          } catch {
+            /* ignore cleanup error */
+          }
           throw new ApiError(`Document database record creation failed: ${docError?.message}`);
         }
 
-        // 4. Compute embeddings for chunks
-        const chunkTexts = extracted.chunks.map((c) => c.chunkText);
-        const embeddings = await embedBatch(chunkTexts);
+        try {
+          // 4. Compute embeddings for chunks
+          const chunkTexts = extracted.chunks.map((c) => c.chunkText);
+          const embeddings = await embedBatch(chunkTexts);
 
-        // 5. Bulk insert document chunks
-        const chunkRows = extracted.chunks.map((chunk, idx) => ({
-          document_id: docRecord.id,
-          user_id: user.id,
-          // The deployed document_chunks schema requires a zero-based chunk index
-          // and the source file path for every chunk.
-          chunk_index: idx,
-          file_path: storagePath,
-          chunk_text: chunk.chunkText,
-          source_kind: chunk.sourceKind,
-          page_number: chunk.pageNumber ?? null,
-          line_start: chunk.lineStart ?? null,
-          line_end: chunk.lineEnd ?? null,
-          symbol_name: chunk.symbolName ?? null,
-          symbol_kind: chunk.symbolKind ?? null,
-          language: chunk.language ?? null,
-          identifiers: chunk.identifiers ?? [],
-          embedding: embeddings[idx],
-        }));
+          // 5. Bulk insert document chunks
+          const chunkRows = extracted.chunks.map((chunk, idx) => ({
+            document_id: docRecord.id,
+            user_id: user.id,
+            chunk_index: idx,
+            chunk_text: chunk.chunkText,
+            file_path: storagePath,
+            source_kind: chunk.sourceKind,
+            page_number: chunk.pageNumber ?? null,
+            line_start: chunk.lineStart ?? null,
+            line_end: chunk.lineEnd ?? null,
+            symbol_name: chunk.symbolName ?? null,
+            symbol_kind: chunk.symbolKind ?? null,
+            language: chunk.language ?? null,
+            identifiers: chunk.identifiers ?? [],
+            embedding: embeddings[idx],
+          }));
 
-        if (chunkRows.length > 0) {
           const { error: chunkError } = await supabase
             .from("document_chunks")
             .insert(chunkRows);
@@ -432,22 +416,43 @@ export class ApiClient {
           if (chunkError) {
             throw new ApiError(`Chunk insertion failed: ${chunkError.message}`);
           }
-        }
 
-        uploadedResults.push({ id: docRecord.id, name: file.name, chunks: chunkRows.length });
+          const { error: statusError } = await supabase
+            .from("documents")
+            .update({ status: "indexed", chunk_count: chunkRows.length })
+            .eq("id", docRecord.id)
+            .eq("user_id", user.id);
+
+          if (statusError) {
+            throw new ApiError(`Indexed chunks but could not update document status: ${statusError.message}`);
+          }
+
+          uploadedResults.push({ id: docRecord.id, name: file.name, chunks: chunkRows.length });
+        } catch (uploadErr) {
+          // Clean up partial chunks and document record on failure
+          try {
+            await supabase.from("document_chunks").delete().eq("document_id", docRecord.id);
+          } catch {
+            /* ignore cleanup error */
+          }
+          try {
+            await supabase.from("documents").delete().eq("id", docRecord.id);
+          } catch {
+            /* ignore cleanup error */
+          }
+          try {
+            await supabase.storage.from("documents").remove([storagePath]);
+          } catch {
+            /* ignore cleanup error */
+          }
+          throw uploadErr;
+        }
       }
 
       return { uploaded: uploadedResults, totalFilesIndexed: uploadedResults.length };
     }
 
-    const formData = new FormData();
-    for (const file of files) formData.append("files", file);
-    return this.request(
-      "/api/files/upload",
-      { method: "POST", body: formData },
-      "File upload failed",
-      UPLOAD_TIMEOUT_MS
-    );
+    return this.request();
   }
 
   async deleteFile(fileId: string): Promise<{ deleted: string; status: string }> {
@@ -457,6 +462,12 @@ export class ApiClient {
         throw new ApiError("Supabase client not initialized", null, true);
       }
 
+      await this.ensureUserSession(supabase);
+      const { data: document, error: lookupError } = await supabase
+        .from("documents").select("storage_path").eq("id", fileId).single();
+      if (lookupError) throw new ApiError(`Failed to find document: ${lookupError.message}`);
+      const { error: storageError } = await supabase.storage.from("documents").remove([document.storage_path]);
+      if (storageError) throw new ApiError(`Failed to remove stored file: ${storageError.message}`);
       const { error } = await supabase.from("documents").delete().eq("id", fileId);
       if (error) {
         throw new ApiError(`Failed to delete document: ${error.message}`);
@@ -465,17 +476,13 @@ export class ApiClient {
       return { deleted: fileId, status: "success" };
     }
 
-    return this.request(
-      `/api/files/${encodeURIComponent(fileId)}`,
-      { method: "DELETE" },
-      "Failed to delete file"
-    );
+    return this.request();
   }
 
   async getHistory(): Promise<SearchHistoryEntry[]> {
     if (isSupabaseConfigured()) {
       const supabase = getSupabaseClient();
-      if (!supabase) return [];
+      if (!supabase) throw new ApiError("Supabase client failed to initialize", null, true);
 
       interface HistoryRow {
         id: string;
@@ -487,13 +494,15 @@ export class ApiClient {
         created_at: string;
       }
 
+      await this.ensureUserSession(supabase);
       const { data, error } = await supabase
         .from("search_history")
         .select("id, query_text, mode, match_count, latency_ms, filters, created_at")
         .order("created_at", { ascending: false })
         .limit(50);
 
-      if (error || !data) return [];
+      if (error) throw new ApiError(`Failed to fetch search history: ${error.message}`);
+      if (!data) return [];
 
       return (data as HistoryRow[]).map((row) => ({
         id: row.id,
@@ -507,22 +516,23 @@ export class ApiClient {
       }));
     }
 
-    return this.request<SearchHistoryEntry[]>("/api/history", {}, "Failed to fetch search history");
+    return this.request<SearchHistoryEntry[]>();
   }
 
   async clearHistory(): Promise<{ cleared: boolean }> {
     if (isSupabaseConfigured()) {
       const supabase = getSupabaseClient();
-      if (!supabase) return { cleared: false };
+      if (!supabase) throw new ApiError("Supabase client failed to initialize", null, true);
 
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await this.ensureUserSession(supabase);
       if (user) {
-        await supabase.from("search_history").delete().eq("user_id", user.id);
+        const { error } = await supabase.from("search_history").delete().eq("user_id", user.id);
+        if (error) throw new ApiError(`Failed to clear search history: ${error.message}`);
       }
       return { cleared: true };
     }
 
-    return this.request("/api/history", { method: "DELETE" }, "Failed to clear search history");
+    return this.request();
   }
 
   async getAnalytics(): Promise<AnalyticsResponse> {
@@ -532,12 +542,16 @@ export class ApiClient {
         throw new ApiError("Supabase not initialized", null, true);
       }
 
+      await this.ensureUserSession(supabase);
       const [docsRes, chunksRes, histRes] = await Promise.all([
         supabase.from("documents").select("content_kind"),
         supabase.from("document_chunks").select("id", { count: "exact", head: true }),
         supabase.from("search_history").select("latency_ms, mode"),
       ]);
 
+      if (docsRes.error || chunksRes.error || histRes.error) {
+        throw new ApiError(`Analytics query failed: ${docsRes.error?.message || chunksRes.error?.message || histRes.error?.message}`);
+      }
       const docs = (docsRes.data || []) as { content_kind?: string }[];
       const totalDocuments = docs.filter((d) => d.content_kind === "document").length;
       const totalCodeFiles = docs.filter((d) => d.content_kind === "code").length;
@@ -565,15 +579,15 @@ export class ApiClient {
         ftsStatus: "Online",
         faissStatus: "Online",
         embeddingModel: "Xenova/all-MiniLM-L6-v2 (Client ONNX 384-D)",
-        precisionAt1: 0.94,
-        precisionAt5: 0.89,
-        recallAt5: 0.86,
-        mrrScore: 0.92,
+        precisionAt1: 0,
+        precisionAt5: 0,
+        recallAt5: 0,
+        mrrScore: 0,
         modeBreakdown,
       };
     }
 
-    return this.request<AnalyticsResponse>("/api/analytics", {}, "Failed to fetch analytics");
+    return this.request<AnalyticsResponse>();
   }
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { startTransition } from "react";
 import {
   Activity,
   Binary,
@@ -35,15 +35,15 @@ interface SidebarProps {
   onToggleCollapse: () => void;
   mobileOpen: boolean;
   onCloseMobile: () => void;
-  /** Number of indexed files, or null when the backend has not answered. */
+  /** Number of indexed files, or null when Supabase has not answered. */
   totalFiles: number | null;
   backendStatus: "checking" | "online" | "offline";
 }
 
 const STATUS_LABEL = {
   checking: "Connecting…",
-  online: "Backend connected",
-  offline: "Backend offline",
+  online: "Supabase connected",
+  offline: "Supabase offline",
 } as const;
 
 export function Sidebar({
@@ -125,7 +125,9 @@ export function Sidebar({
                 key={item.id}
                 type="button"
                 onClick={() => {
-                  onSelectView(item.id);
+                  startTransition(() => {
+                    onSelectView(item.id);
+                  });
                   if (mobileOpen) onCloseMobile();
                 }}
                 className={`nav-link ${isActive ? "active" : ""}`}
@@ -156,7 +158,7 @@ export function Sidebar({
                   <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-main)" }}>
                     {STATUS_LABEL[backendStatus]}
                   </span>
-                  <span style={{ fontSize: 10.5, color: "var(--text-muted)" }}>FTS5 + FAISS + MiniLM</span>
+                  <span style={{ fontSize: 10.5, color: "var(--text-muted)" }}>Postgres FTS + pgvector + MiniLM</span>
                 </div>
               </div>
               <Sparkles size={14} aria-hidden="true" style={{ color: "var(--accent-text)" }} />

@@ -9,8 +9,7 @@ import {
   Terminal,
 } from "lucide-react";
 import type { CompilerTrace, CompilerToken } from "@/types/search";
-import { compileQueryTrace } from "@/lib/compiler-engine";
-import { apiClient, ApiError } from "@/lib/api-client";
+import { apiClient } from "@/lib/api-client";
 import { sampleQueries } from "@/data/example-queries";
 import { TraceSourceNotice, type TraceSource } from "../ui/trace-source-notice";
 
@@ -42,20 +41,12 @@ export function AnalyzerView({
       const realTrace = await apiClient.explain(text);
       if (seq !== requestSeq.current) return;
       setTrace(realTrace);
-      setSource("backend");
+      setSource("local");
     } catch (err) {
       if (seq !== requestSeq.current) return;
-      const message = err instanceof Error ? err.message : "Compiler request failed";
-      setError(message);
-      if (err instanceof ApiError && !err.network) {
-        // The backend understood and rejected the query: show that, not a guess.
-        setTrace(null);
-        setSource(null);
-      } else {
-        // Backend unreachable: offer a clearly-labelled local approximation.
-        setTrace(compileQueryTrace(text));
-        setSource("local-fallback");
-      }
+      setError(err instanceof Error ? err.message : "Compiler failed");
+      setTrace(null);
+      setSource(null);
     } finally {
       if (seq === requestSeq.current) {
         setCompiling(false);
@@ -196,9 +187,9 @@ export function AnalyzerView({
         <div className="metric-card" style={{ padding: "12px 14px" }}>
           <span className="metric-label">Compiler Status</span>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
-            <CheckCircle2 size={16} aria-hidden="true" style={{ color: source === "backend" ? "var(--success)" : "var(--warning)" }} />
+            <CheckCircle2 size={16} aria-hidden="true" style={{ color: source === "local" ? "var(--success)" : "var(--warning)" }} />
             <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-main)" }}>
-              {source === "backend" ? "Compiled by backend" : "Local approximation"}
+              {source === "local" ? "Browser compiler" : "Unavailable"}
             </span>
           </div>
         </div>
@@ -375,7 +366,7 @@ export function AnalyzerView({
                 lineHeight: 1.8,
               }}
             >
-              <div style={{ color: "var(--code-accent)", fontWeight: 700 }}>QueryAST [Root]</div>
+              <div style={{ color: "#818cf8", fontWeight: 700 }}>QueryAST [Root]</div>
               <div style={{ paddingLeft: 18, borderLeft: "1px dashed var(--border-card)" }}>
                 <div>├─ action: <span style={{ color: "#34d399" }}>&quot;{trace.ast.action}&quot;</span></div>
                 <div>├─ target: <span style={{ color: trace.ast.target ? "#fbbf24" : "var(--text-faint)" }}>{trace.ast.target ? `"${trace.ast.target}"` : "None"}</span></div>
@@ -398,7 +389,7 @@ export function AnalyzerView({
               <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", marginBottom: 6 }}>
                 Python Dataclass asdict(self)
               </div>
-              <pre style={{ fontSize: 12, fontFamily: "var(--font-mono)", color: "var(--code-accent)", overflowX: "auto" }}>
+              <pre style={{ fontSize: 12, fontFamily: "var(--font-mono)", color: "#a5b4fc", overflowX: "auto" }}>
 {JSON.stringify(trace.ast, null, 2)}
               </pre>
             </div>
@@ -558,7 +549,7 @@ export function AnalyzerView({
             <div style={{ background: "var(--bg-card-subtle)", padding: 12, borderRadius: 6 }}>
               <div style={{ fontSize: 11, color: "var(--text-faint)", fontWeight: 700 }}>DUAL QUERIES</div>
               <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
-                Lexical BM25 + Dense FAISS MiniLM
+                PostgreSQL full-text + pgvector + MiniLM
               </div>
             </div>
           </div>

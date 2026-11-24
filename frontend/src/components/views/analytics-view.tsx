@@ -14,7 +14,7 @@ import {
 import type { AnalyticsResponse, HealthResponse } from "@/lib/api-client";
 
 interface AnalyticsViewProps {
-  /** `null` when the backend has not answered. */
+  /** `null` when Supabase has not answered. */
   metrics: AnalyticsResponse | null;
   health: HealthResponse | null;
 }
@@ -71,7 +71,7 @@ export function AnalyticsView({ metrics, health }: AnalyticsViewProps) {
           </div>
         </div>
         <p className="page-description">
-          Live usage figures computed by the backend from the search index and the query history.
+          Live usage figures computed from Supabase document, chunk, and search-history records.
         </p>
       </div>
 
@@ -79,7 +79,7 @@ export function AnalyticsView({ metrics, health }: AnalyticsViewProps) {
         <div role="alert" data-testid="analytics-unavailable" className="backend-banner" style={{ margin: "0 0 20px" }}>
           <AlertTriangle size={16} aria-hidden="true" style={{ flexShrink: 0 }} />
           <div>
-            <strong>Analytics unavailable.</strong> The backend did not return metrics, so no figures are shown.
+            <strong>Analytics unavailable.</strong> Supabase did not return metrics, so no figures are shown.
           </div>
         </div>
       )}
@@ -90,35 +90,35 @@ export function AnalyticsView({ metrics, health }: AnalyticsViewProps) {
           value={metrics ? String(metrics.totalDocuments) : dash}
           note="PDF, DOCX, TXT"
           icon={<Database size={16} aria-hidden="true" />}
-          tint={{ bg: "var(--ic-red-bg)", fg: "var(--ic-red-fg)" }}
+          tint={{ bg: "rgba(239, 68, 68, 0.12)", fg: "#f87171" }}
         />
         <Metric
           label="Indexed code files"
           value={metrics ? String(metrics.totalCodeFiles) : dash}
           note="Python, Java, JavaScript"
           icon={<Layers size={16} aria-hidden="true" />}
-          tint={{ bg: "var(--ic-blue-bg)", fg: "var(--ic-blue-fg)" }}
+          tint={{ bg: "rgba(59, 130, 246, 0.12)", fg: "#60a5fa" }}
         />
         <Metric
           label="Searchable chunks"
           value={metrics ? String(metrics.totalChunks) : dash}
-          note="In SQLite FTS5 + FAISS"
+          note="In PostgreSQL full-text search + pgvector"
           icon={<Cpu size={16} aria-hidden="true" />}
-          tint={{ bg: "var(--ic-green-bg)", fg: "var(--ic-green-fg)" }}
+          tint={{ bg: "rgba(16, 185, 129, 0.12)", fg: "#34d399" }}
         />
         <Metric
           label="Searches recorded"
           value={metrics ? String(searches) : dash}
           note="Since history was last cleared"
           icon={<Search size={16} aria-hidden="true" />}
-          tint={{ bg: "var(--ic-accent-bg)", fg: "var(--ic-accent-fg)" }}
+          tint={{ bg: "rgba(99, 102, 241, 0.12)", fg: "#818cf8" }}
         />
         <Metric
-          label="Average server time"
+          label="Average search time"
           value={metrics && searches > 0 ? `${metrics.avgLatencyMs} ms` : dash}
           note={searches > 0 ? "Mean over recorded searches" : "No searches recorded yet"}
           icon={<Zap size={16} aria-hidden="true" />}
-          tint={{ bg: "var(--ic-amber-bg)", fg: "var(--ic-amber-fg)" }}
+          tint={{ bg: "rgba(245, 158, 11, 0.12)", fg: "#fbbf24" }}
         />
       </div>
 
@@ -153,7 +153,7 @@ export function AnalyticsView({ metrics, health }: AnalyticsViewProps) {
                       aria-valuenow={pct}
                       style={{ height: 8, background: "var(--bg-card-subtle)", borderRadius: 9999, overflow: "hidden" }}
                     >
-                      <div style={{ width: `${pct}%`, height: "100%", background: "var(--accent-gradient)" }} />
+                      <div style={{ width: `${pct}%`, height: "100%", background: "linear-gradient(90deg, #6366f1, #3b82f6)" }} />
                     </div>
                   </div>
                 );
@@ -171,9 +171,9 @@ export function AnalyticsView({ metrics, health }: AnalyticsViewProps) {
               <dt>Status</dt>
               <dd style={{ color: "var(--success)" }}>● {health.status}</dd>
               <dt>Lexical engine</dt>
-              <dd>{health.fts_engine ?? "SQLite FTS5"}</dd>
+              <dd>{health.fts_engine ?? "PostgreSQL full-text search"}</dd>
               <dt>Vector engine</dt>
-              <dd>{health.vector_engine ?? "FAISS"}</dd>
+              <dd>{health.vector_engine ?? "pgvector"}</dd>
               <dt>Embedding model</dt>
               <dd>{health.embedding_model}</dd>
               <dt>Chunks indexed</dt>
@@ -182,12 +182,12 @@ export function AnalyticsView({ metrics, health }: AnalyticsViewProps) {
               <dd>Reciprocal Rank Fusion</dd>
             </dl>
           ) : (
-            <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Backend health is unavailable.</p>
+            <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Supabase health is unavailable.</p>
           )}
         </div>
       </div>
 
-      {/* Honest placeholder: the backend returns constants for these, so they are not displayed. */}
+      {/* Honest placeholder: retrieval quality is not measured without labelled evaluation data. */}
       <div className="surface-card" data-testid="quality-not-measured">
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
           <Info size={16} aria-hidden="true" style={{ color: "var(--info)" }} />
@@ -197,8 +197,7 @@ export function AnalyticsView({ metrics, health }: AnalyticsViewProps) {
         </div>
         <p style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.6 }}>
           <strong style={{ color: "var(--text-main)" }}>Not measured yet.</strong> These need a labelled evaluation set
-          with known-relevant results for each query. The backend&apos;s analytics endpoint currently returns fixed
-          placeholder values for them rather than computed ones, so the interface does not display them.
+          with known-relevant results for each query. The application does not calculate these ranking-quality metrics yet; they remain unavailable until a labelled evaluation set is added.
           Planned in the evaluation phase.
         </p>
       </div>

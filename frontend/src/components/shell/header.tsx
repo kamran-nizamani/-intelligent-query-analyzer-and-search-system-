@@ -122,7 +122,7 @@ export function Header({
           {theme === "dark" ? <Sun size={17} aria-hidden="true" /> : <Moon size={17} aria-hidden="true" />}
         </button>
 
-        {/* Real backend connection status (replaces the former hard-coded notification list) */}
+        {/* Real Supabase connection status (replaces the former hard-coded notification list) */}
         <div ref={statusWrapRef} style={{ position: "relative" }}>
           <button
             type="button"
@@ -132,18 +132,18 @@ export function Header({
             data-testid="backend-status"
             aria-expanded={showStatus}
             aria-haspopup="true"
-            aria-label={`Backend ${STATUS_TEXT[backendStatus]}, show details`}
+            aria-label={`Supabase ${STATUS_TEXT[backendStatus]}, show details`}
           >
             <span className={`status-dot status-${backendStatus}`} aria-hidden="true" />
-            <span className="status-pill-text">Backend {STATUS_TEXT[backendStatus]}</span>
+            <span className="status-pill-text">Supabase {STATUS_TEXT[backendStatus]}</span>
           </button>
 
           {showStatus && (
-            <div className="popover" role="region" aria-label="Backend connection details">
+            <div className="popover" role="region" aria-label="Supabase connection details">
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
                 <Server size={15} aria-hidden="true" style={{ color: "var(--accent-text)" }} />
                 <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-main)" }}>
-                  API server: {STATUS_TEXT[backendStatus]}
+                  Supabase: {STATUS_TEXT[backendStatus]}
                 </span>
               </div>
 
@@ -169,8 +169,8 @@ export function Header({
               ) : (
                 <p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5, marginBottom: 10 }}>
                   {backendStatus === "checking"
-                    ? "Checking the API server…"
-                    : "The API server did not respond. Start the FastAPI backend and retry."}
+                    ? "Checking Supabase connectivity…"
+                    : "Supabase did not respond. Check the project URL, publishable key, and Anonymous Sign-Ins setting."}
                 </p>
               )}
 

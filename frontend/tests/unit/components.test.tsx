@@ -97,12 +97,12 @@ describe("Sidebar", () => {
   it("marks the current page and reports the real backend state", () => {
     render(<Sidebar {...base} />);
     expect(screen.getByRole("button", { name: /Intelligent Search/ })).toHaveAttribute("aria-current", "page");
-    expect(screen.getByTestId("engine-status")).toHaveTextContent("Backend connected");
+    expect(screen.getByTestId("engine-status")).toHaveTextContent("Supabase connected");
   });
 
   it("shows an offline state instead of a permanently green dot", () => {
     render(<Sidebar {...base} backendStatus="offline" />);
-    expect(screen.getByTestId("engine-status")).toHaveTextContent("Backend offline");
+    expect(screen.getByTestId("engine-status")).toHaveTextContent("Supabase offline");
   });
 
   it("shows a dash, not a number, when the file count is unknown", () => {

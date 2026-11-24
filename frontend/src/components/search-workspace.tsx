@@ -111,7 +111,23 @@ export function SearchWorkspace() {
   }, []);
 
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", settings.theme);
+    const applyTheme = () => {
+      let resolvedTheme = settings.theme;
+      if (resolvedTheme === "system") {
+        resolvedTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      }
+      document.documentElement.setAttribute("data-theme", resolvedTheme);
+    };
+
+    applyTheme();
+
+    if (settings.theme === "system") {
+      const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+      const handler = () => applyTheme();
+      mediaQuery.addEventListener("change", handler);
+      return () => mediaQuery.removeEventListener("change", handler);
+    }
+
     if (!settingsLoaded.current) return;
     try {
       window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -119,6 +135,17 @@ export function SearchWorkspace() {
       /* ignore: persistence is a convenience only */
     }
   }, [settings]);
+
+  // Pre-warm ONNX embedding model during idle time to prevent first-query latency spikes
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const idleTimer = setTimeout(() => {
+      import("@/lib/embeddings/web-embedder")
+        .then((m) => m.getWebEmbedder().catch(() => {}))
+        .catch(() => {});
+    }, 1500);
+    return () => clearTimeout(idleTimer);
+  }, []);
 
   // Global shortcut: Ctrl/Cmd+K opens the palette
   useEffect(() => {

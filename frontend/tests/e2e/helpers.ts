@@ -1,6 +1,4 @@
-import { expect, type Page, type TestInfo } from "@playwright/test";
-
-export const API = "http://localhost:8000";
+import { expect, type Page } from "@playwright/test";
 
 export const VIEWS = [
   { name: "Overview", heading: /Intelligent Query Analyzer & Search System/ },
@@ -28,19 +26,6 @@ export async function gotoView(page: Page, name: ViewName) {
   await page.locator("#app-sidebar").getByRole("button", { name: new RegExp(`^${name}`) }).click();
   const view = VIEWS.find((v) => v.name === name)!;
   await expect(page.getByRole("heading", { level: 1 }).first()).toHaveText(view.heading);
-}
-
-export async function backendIsUp(): Promise<boolean> {
-  try {
-    const r = await fetch(`${API}/api/health`, { signal: AbortSignal.timeout(4000) });
-    return r.ok;
-  } catch {
-    return false;
-  }
-}
-
-export function isDesktopProject(info: TestInfo) {
-  return info.project.name === "desktop-1920";
 }
 
 /** Collect console errors / uncaught exceptions, ignoring third-party font fetches. */

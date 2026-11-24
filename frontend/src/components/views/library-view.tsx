@@ -344,7 +344,7 @@ export function LibraryView({
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                           <Icon
                             size={18}
-                            style={{ color: isCode ? "var(--c-code)" : "var(--c-doc)", flexShrink: 0 }}
+                            style={{ color: isCode ? "#60a5fa" : "#fb7185", flexShrink: 0 }}
                           />
                           <span style={{ fontWeight: 600, color: "var(--text-main)" }}>
                             {file.name}

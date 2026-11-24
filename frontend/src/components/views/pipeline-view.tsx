@@ -11,8 +11,7 @@ import {
   Play,
 } from "lucide-react";
 import type { CompilerTrace } from "@/types/search";
-import { compileQueryTrace } from "@/lib/compiler-engine";
-import { apiClient, ApiError } from "@/lib/api-client";
+import { apiClient } from "@/lib/api-client";
 import { TraceSourceNotice, type TraceSource } from "../ui/trace-source-notice";
 import { sampleQueries } from "@/data/example-queries";
 
@@ -43,20 +42,13 @@ export function PipelineView({
       const realTrace = await apiClient.explain(text);
       if (seq !== requestSeq.current) return;
       setTrace(realTrace);
-      setSource("backend");
+      setSource("local");
       setSelectedStageIndex(0);
     } catch (err) {
       if (seq !== requestSeq.current) return;
-      setError(err instanceof Error ? err.message : "Compiler request failed");
-      if (err instanceof ApiError && !err.network) {
-        setTrace(null);
-        setSource(null);
-      } else {
-        // Backend unreachable: clearly-labelled local approximation.
-        setTrace(compileQueryTrace(text));
-        setSource("local-fallback");
-        setSelectedStageIndex(0);
-      }
+      setError(err instanceof Error ? err.message : "Compiler failed");
+      setTrace(null);
+      setSource(null);
     } finally {
       if (seq === requestSeq.current) setLoading(false);
     }
@@ -222,12 +214,12 @@ export function PipelineView({
                         ? "var(--accent-primary)"
                         : isRetrieval
                           ? "rgba(16, 185, 129, 0.2)"
-                          : "var(--accent-subtle-strong)",
+                          : "rgba(99, 102, 241, 0.2)",
                       color: isSelected
                         ? "#fff"
                         : isRetrieval
                           ? "var(--success)"
-                          : "var(--accent-text)",
+                          : "var(--accent-primary)",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -253,7 +245,7 @@ export function PipelineView({
                     }}
                   >
                     <Clock size={10} aria-hidden="true" />
-                    <span title="Nominal per-stage figure reported by the backend; not measured">~{stage.durationMs}ms</span>
+                    <span title="Nominal per-stage estimate; not measured">~{stage.durationMs}ms</span>
                   </div>
                 </button>
 
@@ -404,7 +396,7 @@ export function PipelineView({
             role="region"
             aria-label="Raw serialized stage payload"
           >
-            <pre style={{ fontSize: 11.5, fontFamily: "var(--font-mono)", color: "var(--code-accent)" }}>
+            <pre style={{ fontSize: 11.5, fontFamily: "var(--font-mono)", color: "#a5b4fc" }}>
 {JSON.stringify(selectedStage.rawOutput, null, 2)}
             </pre>
           </div>
