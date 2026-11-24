@@ -208,7 +208,7 @@ export class ApiClient {
         rrf_score: number;
       }
 
-      const { data, error } = await supabase.rpc("search_chunks_v2", {
+      const { data, error } = await supabase.rpc("search_chunks_v3", {
         query_text: plan.lexicalQuery || query,
         query_embedding: embedding,
         match_limit: options.limit || plan.limit || 10,
