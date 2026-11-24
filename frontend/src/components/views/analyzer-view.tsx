@@ -375,7 +375,7 @@ export function AnalyzerView({
                 lineHeight: 1.8,
               }}
             >
-              <div style={{ color: "#818cf8", fontWeight: 700 }}>QueryAST [Root]</div>
+              <div style={{ color: "var(--code-accent)", fontWeight: 700 }}>QueryAST [Root]</div>
               <div style={{ paddingLeft: 18, borderLeft: "1px dashed var(--border-card)" }}>
                 <div>├─ action: <span style={{ color: "#34d399" }}>&quot;{trace.ast.action}&quot;</span></div>
                 <div>├─ target: <span style={{ color: trace.ast.target ? "#fbbf24" : "var(--text-faint)" }}>{trace.ast.target ? `"${trace.ast.target}"` : "None"}</span></div>
@@ -398,7 +398,7 @@ export function AnalyzerView({
               <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", marginBottom: 6 }}>
                 Python Dataclass asdict(self)
               </div>
-              <pre style={{ fontSize: 12, fontFamily: "var(--font-mono)", color: "#a5b4fc", overflowX: "auto" }}>
+              <pre style={{ fontSize: 12, fontFamily: "var(--font-mono)", color: "var(--code-accent)", overflowX: "auto" }}>
 {JSON.stringify(trace.ast, null, 2)}
               </pre>
             </div>

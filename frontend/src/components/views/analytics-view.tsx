@@ -90,35 +90,35 @@ export function AnalyticsView({ metrics, health }: AnalyticsViewProps) {
           value={metrics ? String(metrics.totalDocuments) : dash}
           note="PDF, DOCX, TXT"
           icon={<Database size={16} aria-hidden="true" />}
-          tint={{ bg: "rgba(239, 68, 68, 0.12)", fg: "#f87171" }}
+          tint={{ bg: "var(--ic-red-bg)", fg: "var(--ic-red-fg)" }}
         />
         <Metric
           label="Indexed code files"
           value={metrics ? String(metrics.totalCodeFiles) : dash}
           note="Python, Java, JavaScript"
           icon={<Layers size={16} aria-hidden="true" />}
-          tint={{ bg: "rgba(59, 130, 246, 0.12)", fg: "#60a5fa" }}
+          tint={{ bg: "var(--ic-blue-bg)", fg: "var(--ic-blue-fg)" }}
         />
         <Metric
           label="Searchable chunks"
           value={metrics ? String(metrics.totalChunks) : dash}
           note="In SQLite FTS5 + FAISS"
           icon={<Cpu size={16} aria-hidden="true" />}
-          tint={{ bg: "rgba(16, 185, 129, 0.12)", fg: "#34d399" }}
+          tint={{ bg: "var(--ic-green-bg)", fg: "var(--ic-green-fg)" }}
         />
         <Metric
           label="Searches recorded"
           value={metrics ? String(searches) : dash}
           note="Since history was last cleared"
           icon={<Search size={16} aria-hidden="true" />}
-          tint={{ bg: "rgba(99, 102, 241, 0.12)", fg: "#818cf8" }}
+          tint={{ bg: "var(--ic-accent-bg)", fg: "var(--ic-accent-fg)" }}
         />
         <Metric
           label="Average server time"
           value={metrics && searches > 0 ? `${metrics.avgLatencyMs} ms` : dash}
           note={searches > 0 ? "Mean over recorded searches" : "No searches recorded yet"}
           icon={<Zap size={16} aria-hidden="true" />}
-          tint={{ bg: "rgba(245, 158, 11, 0.12)", fg: "#fbbf24" }}
+          tint={{ bg: "var(--ic-amber-bg)", fg: "var(--ic-amber-fg)" }}
         />
       </div>
 
@@ -153,7 +153,7 @@ export function AnalyticsView({ metrics, health }: AnalyticsViewProps) {
                       aria-valuenow={pct}
                       style={{ height: 8, background: "var(--bg-card-subtle)", borderRadius: 9999, overflow: "hidden" }}
                     >
-                      <div style={{ width: `${pct}%`, height: "100%", background: "linear-gradient(90deg, #6366f1, #3b82f6)" }} />
+                      <div style={{ width: `${pct}%`, height: "100%", background: "var(--accent-gradient)" }} />
                     </div>
                   </div>
                 );
