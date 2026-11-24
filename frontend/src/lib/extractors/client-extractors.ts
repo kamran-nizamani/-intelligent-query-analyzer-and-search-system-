@@ -11,43 +11,15 @@ export interface ExtractedFileResult {
 }
 
 const CODE_EXTENSIONS = new Set([
-  "py",
-  "java",
-  "js",
-  "jsx",
-  "ts",
-  "tsx",
-  "c",
-  "cpp",
-  "h",
-  "cs",
-  "go",
-  "rs",
-  "php",
-  "rb",
-  "sql",
-  "html",
-  "css",
-  "sh",
+  "py", "java", "js", "jsx", "ts", "tsx", "c", "cpp", "h", "cs",
+  "go", "rs", "php", "rb", "sql", "html", "css", "sh",
 ]);
 
 const LANGUAGE_MAP: Record<string, string> = {
-  py: "python",
-  java: "java",
-  js: "javascript",
-  jsx: "javascript",
-  ts: "typescript",
-  tsx: "typescript",
-  sql: "sql",
-  html: "html",
-  css: "css",
-  sh: "shell",
-  rb: "ruby",
-  go: "go",
-  rs: "rust",
-  cpp: "cpp",
-  c: "c",
-  cs: "csharp",
+  py: "python", java: "java", js: "javascript", jsx: "javascript",
+  ts: "typescript", tsx: "typescript", sql: "sql", html: "html",
+  css: "css", sh: "shell", rb: "ruby", go: "go", rs: "rust",
+  cpp: "cpp", c: "c", cs: "csharp",
 };
 
 export function getFileExtension(filename: string): string {
@@ -56,40 +28,56 @@ export function getFileExtension(filename: string): string {
 }
 
 export function isCodeFile(filename: string): boolean {
-  const ext = getFileExtension(filename);
-  return CODE_EXTENSIONS.has(ext);
+  return CODE_EXTENSIONS.has(getFileExtension(filename));
+}
+
+/** Reject empty/scanned PDFs instead of silently indexing binary or unusable data. */
+export function validateExtractedPdfText(text: string): string {
+  const normalized = text.replace(/\u0000/g, "").replace(/[\t ]+/g, " ").trim();
+  const alphanumericCount = (normalized.match(/[\p{L}\p{N}]/gu) || []).length;
+  if (normalized.length < 30 || alphanumericCount < 20) {
+    throw new Error(
+      "This PDF has no readable text layer (it may be scanned or image-only). It was not indexed. Please use a text-based PDF."
+    );
+  }
+  return normalized;
 }
 
 /**
- * Extracts raw text from simple PDF streams when native worker is unavailable.
+ * Extract PDF text with PDF.js. Never decode the raw PDF byte stream as text:
+ * compressed streams, font encodings and object metadata are not document text.
  */
-function extractBasicPdfText(buffer: ArrayBuffer): string {
-  const decoder = new TextDecoder("latin1");
-  const text = decoder.decode(buffer);
-  const streamRegex = /stream[\r\n]+([\s\S]*?)[\r\n]+endstream/g;
-  let match: RegExpExecArray | null;
-  const parts: string[] = [];
+async function extractPdfText(arrayBuffer: ArrayBuffer): Promise<string> {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+    "pdfjs-dist/legacy/build/pdf.worker.min.mjs",
+    import.meta.url
+  ).toString();
 
-  while ((match = streamRegex.exec(text)) !== null) {
-    const raw = match[1];
-    // Filter printable text segments
-    const clean = raw.replace(/[^\x20-\x7E\r\n\t]/g, " ").replace(/\s+/g, " ").trim();
-    if (clean.length > 20) {
-      parts.push(clean);
+  const loadingTask = pdfjs.getDocument({ data: new Uint8Array(arrayBuffer) });
+  const document = await loadingTask.promise;
+  const pages: string[] = [];
+
+  try {
+    for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
+      const page = await document.getPage(pageNumber);
+      const content = await page.getTextContent();
+      const pageText = content.items
+        .map((item) => ("str" in item ? item.str + (item.hasEOL ? "\n" : " ") : ""))
+        .join("")
+        .replace(/[ \t]+/g, " ")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+      if (pageText) pages.push(pageText);
     }
+  } finally {
+    await document.destroy();
   }
 
-  if (parts.length > 0) {
-    return parts.join("\n\n");
-  }
-
-  // Fallback to ASCII filter over full buffer
-  return text.replace(/[^\x20-\x7E\r\n\t]/g, " ").replace(/\s+/g, " ").trim();
+  return validateExtractedPdfText(pages.join("\n\n"));
 }
 
-/**
- * Extracts text and chunks from a browser File object.
- */
+/** Extracts text and chunks from a browser File object. */
 export async function extractFileInBrowser(file: File): Promise<ExtractedFileResult> {
   const ext = getFileExtension(file.name);
   const isCode = isCodeFile(file.name);
@@ -101,19 +89,21 @@ export async function extractFileInBrowser(file: File): Promise<ExtractedFileRes
     const result = await mammoth.extractRawText({ arrayBuffer });
     rawText = result.value || "";
   } else if (ext === "pdf") {
-    const arrayBuffer = await file.arrayBuffer();
-    rawText = extractBasicPdfText(arrayBuffer);
+    rawText = await extractPdfText(await file.arrayBuffer());
   } else {
-    // Plain text or code file
     rawText = await file.text();
   }
 
-  let chunks: DocumentChunkSpec[] = [];
-  if (isCode) {
-    const lang = LANGUAGE_MAP[ext] || ext;
-    chunks = chunkSourceCode(rawText, file.name, lang);
-  } else {
-    chunks = chunkProseText(rawText);
+  if (!rawText.trim()) {
+    throw new Error(`No readable text could be extracted from "${file.name}". The file was not indexed.`);
+  }
+
+  const chunks = isCode
+    ? chunkSourceCode(rawText, file.name, LANGUAGE_MAP[ext] || ext)
+    : chunkProseText(rawText);
+
+  if (chunks.length === 0) {
+    throw new Error(`No searchable text was extracted from "${file.name}". The file was not indexed.`);
   }
 
   return {
