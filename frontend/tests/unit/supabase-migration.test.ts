@@ -33,6 +33,12 @@ describe("Supabase-Only Migration Unit Tests", () => {
       expect(ast.limit).toBe(5);
     });
 
+    it("keeps method searches distinct from function searches", () => {
+      const methodTrace = compileQueryTrace("find Python methods that validate tokens");
+      expect(methodTrace.ast.target).toBe("method");
+      expect(methodTrace.optimizedIr.filters.symbol_kind).toBe("method");
+    });
+
     it("compiles query into 7-stage explanation trace without network calls", () => {
       const trace = compileQueryTrace("Search Java classes that implement authentication");
       expect(trace.stages).toHaveLength(7);
