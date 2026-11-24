@@ -41,6 +41,10 @@
     "vitest": "^2.1.9"
   },
   "overrides": {
-    "postcss": "^8.5.33"
+    "postcss": "^8.5.33",
+    "@xenova/transformers": {
+      "onnxruntime-web": "$onnxruntime-web",
+      "sharp": "^0.35.5"
+    }
   }
 }
