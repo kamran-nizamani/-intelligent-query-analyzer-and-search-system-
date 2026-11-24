@@ -184,7 +184,7 @@ export function LibraryView({
           Supported file extensions: <strong>{ALLOWED_EXTENSIONS.join(", ")}</strong> (max {MAX_UPLOAD_BYTES / 1024 / 1024} MB per file, checked before upload)
         </p>
         <div style={{ display: "flex", justifyContent: "center", gap: 6, flexWrap: "wrap" }}>
-          {["PDF Document", "Word DOCX", "Plain TXT", "Python (.py)", "Java (.java)", "JavaScript (.js)"].map((badge) => (
+          {["PDF Document", "Word DOCX", "Plain TXT", "Python (.py)", "Java (.java)", "JavaScript (.js)", "JSX (.jsx)"].map((badge) => (
             <span
               key={badge}
               style={{
