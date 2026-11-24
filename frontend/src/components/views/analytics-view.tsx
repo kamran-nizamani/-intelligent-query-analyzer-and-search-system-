@@ -102,7 +102,7 @@ export function AnalyticsView({ metrics, health }: AnalyticsViewProps) {
         <Metric
           label="Searchable chunks"
           value={metrics ? String(metrics.totalChunks) : dash}
-          note="In SQLite FTS5 + FAISS"
+          note="PostgreSQL FTS + pgvector"
           icon={<Cpu size={16} aria-hidden="true" />}
           tint={{ bg: "var(--ic-green-bg)", fg: "var(--ic-green-fg)" }}
         />
