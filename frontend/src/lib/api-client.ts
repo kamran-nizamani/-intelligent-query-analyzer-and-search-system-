@@ -446,7 +446,8 @@ export class ApiClient {
               file_size: file.size,
               chunk_count: extracted.chunks.length,
               content_kind: extracted.contentKind,
-              status: "indexed",
+              // Do not advertise the file as indexed until every chunk is persisted.
+              status: "processing",
             })
             .select("id")
             .single();
@@ -479,10 +480,26 @@ export class ApiClient {
           }));
 
           if (chunkRows.length > 0) {
-            const { error: chunkError } = await supabase
+            const { data: insertedChunks, error: chunkError } = await supabase
               .from("document_chunks")
-              .insert(chunkRows);
+              .insert(chunkRows)
+              .select("id");
             if (chunkError) throw new ApiError(`Chunk insertion failed: ${chunkError.message}`);
+            if (!insertedChunks || insertedChunks.length !== chunkRows.length) {
+              throw new ApiError(
+                `Chunk insertion was incomplete: expected ${chunkRows.length}, received ${insertedChunks?.length ?? 0}.`
+              );
+            }
+          }
+
+          const { data: indexedRecord, error: statusError } = await supabase
+            .from("documents")
+            .update({ status: "indexed" })
+            .eq("id", docRecord.id)
+            .select("id")
+            .single();
+          if (statusError || !indexedRecord) {
+            throw new ApiError(`Failed to confirm indexed status: ${statusError?.message || "No document row was returned"}`);
           }
 
           uploadedResults.push({ id: docRecord.id, name: file.name, chunks: chunkRows.length });
@@ -498,12 +515,22 @@ export class ApiClient {
               storageCleanupSucceeded = true;
             }
           }
+          let documentRemoved = !documentId;
           if (documentId && storageCleanupSucceeded) {
             const { error } = await supabase.from("documents").delete().eq("id", documentId);
             if (error) cleanupErrors.push(`document rollback: ${error.message}`);
-          } else if (documentId) {
-            cleanupErrors.push("document row retained so Storage cleanup can be retried");
+            else documentRemoved = true;
           }
+
+          if (documentId && !documentRemoved) {
+            const { error } = await supabase
+              .from("documents")
+              .update({ status: "failed" })
+              .eq("id", documentId);
+            if (error) cleanupErrors.push(`failed-state update: ${error.message}`);
+            cleanupErrors.push("document row retained for cleanup/retry; it is not marked indexed");
+          }
+
           const message = uploadError instanceof Error ? uploadError.message : "Unexpected upload error";
           if (cleanupErrors.length) {
             throw new ApiError(`${message}. Cleanup also failed (${cleanupErrors.join("; ")}); inspect this file's index state.`);
