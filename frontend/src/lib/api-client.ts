@@ -612,9 +612,9 @@ export class ApiClient {
       }
 
       const [docsRes, chunksRes, histRes] = await Promise.all([
-        supabase.from("documents").select("content_kind, document_chunks(count)"),
+        supabase.from("documents").select("content_kind, chunk_count, document_chunks(count)"),
         supabase.from("document_chunks").select("id", { count: "exact", head: true }),
-        supabase.from("search_history").select("latency_ms, mode"),
+        supabase.rpc("get_search_analytics"),
       ]);
 
       const failedQuery = [docsRes, chunksRes, histRes].find((result) => result.error);
@@ -622,25 +622,25 @@ export class ApiClient {
 
       const docs = (docsRes.data || []) as {
         content_kind?: string;
+        chunk_count?: number;
         document_chunks?: Array<{ count: number }>;
       }[];
-      const indexedDocs = docs.filter((d) => (d.document_chunks?.[0]?.count ?? 0) > 0);
+      const indexedDocs = docs.filter((d) => {
+        const actual = d.document_chunks?.[0]?.count ?? 0;
+        return actual > 0 && actual === (d.chunk_count ?? 0);
+      });
       const totalDocuments = indexedDocs.filter((d) => d.content_kind === "document").length;
       const totalCodeFiles = indexedDocs.filter((d) => d.content_kind === "code").length;
       const totalChunks = chunksRes.count ?? 0;
 
-      const historyData = (histRes.data || []) as { latency_ms?: number; mode?: string }[];
-      const totalSearches = historyData.length;
-      const avgLatencyMs =
-        totalSearches > 0
-          ? +(historyData.reduce((acc, h) => acc + (h.latency_ms || 0), 0) / totalSearches).toFixed(1)
-          : 0;
-
-      const modeBreakdown: Record<string, number> = { hybrid: 0, semantic: 0, lexical: 0 };
-      for (const h of historyData) {
-        const m = h.mode || "hybrid";
-        modeBreakdown[m] = (modeBreakdown[m] || 0) + 1;
-      }
+      const searchAnalytics = (histRes.data || {}) as {
+        total_searches?: number;
+        avg_latency_ms?: number;
+        mode_breakdown?: Record<string, number>;
+      };
+      const totalSearches = Number(searchAnalytics.total_searches ?? 0);
+      const avgLatencyMs = +Number(searchAnalytics.avg_latency_ms ?? 0).toFixed(1);
+      const modeBreakdown = searchAnalytics.mode_breakdown ?? { hybrid: 0, semantic: 0, lexical: 0 };
 
       return {
         totalDocuments,
@@ -648,13 +648,7 @@ export class ApiClient {
         totalChunks,
         totalSearches,
         avgLatencyMs,
-        ftsStatus: "Online",
-        faissStatus: "Online",
         embeddingModel: "Xenova/all-MiniLM-L6-v2 (Client ONNX 384-D)",
-        precisionAt1: 0.94,
-        precisionAt5: 0.89,
-        recallAt5: 0.86,
-        mrrScore: 0.92,
         modeBreakdown,
       };
     }
