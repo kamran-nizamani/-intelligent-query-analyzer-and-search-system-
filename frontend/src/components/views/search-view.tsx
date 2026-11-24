@@ -33,7 +33,7 @@ import type { ToastTone } from "../ui/toast";
 interface SearchViewProps {
   query: string;
   onQueryChange: (q: string) => void;
-  onExecuteSearch: (q: string, mode?: SearchMode) => void;
+  onExecuteSearch: (q: string, mode?: SearchMode, kind?: "all" | SourceKind, type?: "ALL" | SourceType) => void;
   /** `null` until the user has run a search (or after a failed one). */
   results: SearchResult[] | null;
   loading: boolean;
@@ -119,7 +119,7 @@ export function SearchView({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (query.trim()) onExecuteSearch(query.trim(), searchMode);
+    if (query.trim()) onExecuteSearch(query.trim(), searchMode, selectedKind, selectedType);
   };
 
   const handleVoiceToggle = () => {
@@ -148,7 +148,7 @@ export function SearchView({
         const spoken = event.results[0]?.[0]?.transcript?.trim();
         if (spoken) {
           onQueryChange(spoken);
-          onExecuteSearch(spoken, searchMode);
+          onExecuteSearch(spoken, searchMode, selectedKind, selectedType);
         }
       };
       recognition.onerror = (e) => {
@@ -184,10 +184,10 @@ export function SearchView({
   const handleModeChange = (mode: SearchMode) => {
     setSearchMode(mode);
     // Only re-run when there is something on screen to re-run.
-    if (results !== null && query.trim()) onExecuteSearch(query.trim(), mode);
+    if (results !== null && query.trim()) onExecuteSearch(query.trim(), mode, selectedKind, selectedType);
   };
 
-  // Filtering and sorting happen in the browser over the results the backend returned.
+  // The backend filters before ranking; this final pass keeps legacy API results consistent.
   const filteredResults = useMemo(() => {
     const list = (results ?? []).filter((r) => {
       if (selectedKind !== "all" && r.kind !== selectedKind) return false;
@@ -391,7 +391,10 @@ export function SearchView({
                   key={k.id}
                   type="button"
                   aria-pressed={selectedKind === k.id}
-                  onClick={() => setSelectedKind(k.id)}
+                  onClick={() => {
+                    setSelectedKind(k.id);
+                    if (results !== null && query.trim()) onExecuteSearch(query.trim(), searchMode, k.id, selectedType);
+                  }}
                   style={{ ...segmentedStyle(selectedKind === k.id), padding: "4px 10px", fontSize: 12 }}
                 >
                   {k.label}
@@ -448,7 +451,10 @@ export function SearchView({
                     key={t}
                     type="button"
                     aria-pressed={selectedType === t}
-                    onClick={() => setSelectedType(t)}
+                    onClick={() => {
+                      setSelectedType(t);
+                      if (results !== null && query.trim()) onExecuteSearch(query.trim(), searchMode, selectedKind, t);
+                    }}
                     style={chipStyle(selectedType === t)}
                   >
                     {t}
@@ -612,7 +618,7 @@ export function SearchView({
               <button
                 type="button"
                 className="btn-secondary"
-                onClick={() => onExecuteSearch(query, searchMode)}
+                onClick={() => onExecuteSearch(query, searchMode, selectedKind, selectedType)}
               >
                 Try again
               </button>
