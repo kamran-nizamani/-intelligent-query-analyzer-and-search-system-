@@ -59,7 +59,11 @@ BEGIN
           AND (filter_kind IS NULL OR c.source_kind = filter_kind)
           AND (filter_language IS NULL OR lower(c.language) = lower(filter_language))
           AND (filter_symbol IS NULL OR lower(c.symbol_kind) = lower(filter_symbol))
-          AND (filter_type IS NULL OR upper(d.file_type) = upper(filter_type))
+          AND (
+              filter_type IS NULL
+              OR (upper(filter_type) = 'JS' AND upper(d.file_type) IN ('JS', 'JSX'))
+              OR upper(d.file_type) = upper(filter_type)
+          )
         ORDER BY ts_rank_cd(c.fts, websearch_to_tsquery('english', query_text)) DESC,
                  c.id ASC
         LIMIT 60
@@ -76,7 +80,11 @@ BEGIN
           AND (filter_kind IS NULL OR c.source_kind = filter_kind)
           AND (filter_language IS NULL OR lower(c.language) = lower(filter_language))
           AND (filter_symbol IS NULL OR lower(c.symbol_kind) = lower(filter_symbol))
-          AND (filter_type IS NULL OR upper(d.file_type) = upper(filter_type))
+          AND (
+              filter_type IS NULL
+              OR (upper(filter_type) = 'JS' AND upper(d.file_type) IN ('JS', 'JSX'))
+              OR upper(d.file_type) = upper(filter_type)
+          )
         ORDER BY c.embedding <=> query_embedding ASC, c.id ASC
         LIMIT 60
     ),
