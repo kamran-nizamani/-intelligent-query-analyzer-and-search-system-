@@ -17,6 +17,7 @@ import {
   type HealthResponse,
 } from "@/lib/api-client";
 import { validateUploads } from "@/lib/upload-validation";
+import { yieldToMain } from "@/lib/scheduler";
 
 import { Sidebar, type NavItem } from "./shell/sidebar";
 import { Header } from "./shell/header";
@@ -169,6 +170,7 @@ export function SearchWorkspace() {
 
   const handleRetryConnection = async () => {
     setBackendStatus("checking");
+    await yieldToMain();
     await refreshBackendData();
   };
 
@@ -181,6 +183,8 @@ export function SearchWorkspace() {
       setSearchLoading(true);
       setSearchError(null);
       setCurrentView("search");
+      // Yield to the browser render engine so loading states paint immediately (<16ms INP)
+      await yieldToMain();
 
       try {
         const response = await apiClient.search(trimmed, { mode, limit: settings.resultsPerPage });
