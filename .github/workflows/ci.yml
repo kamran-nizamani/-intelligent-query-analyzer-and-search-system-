@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: ["fix/reliability-performance-audit"]
+  pull_request:
+    branches: ["fix/relevance-search-modes"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Python backend tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install backend dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Run backend unit and integration tests
+        run: python -m unittest discover -s tests -v
+
+  frontend:
+    name: Frontend lint, types, unit tests, and production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Resolve patched transitive runtime dependencies
+        run: npm install --package-lock-only --ignore-scripts
+      - name: Install frontend dependencies
+        run: npm ci
+      - name: Audit all dependencies
+        run: |
+          npm audit --json > npm-audit.json || true
+          node -e 'const a=require("./npm-audit.json"); for (const [name,v] of Object.entries(a.vulnerabilities || {})) console.log(JSON.stringify({name,severity:v.severity,range:v.range,dev:v.isDirect ? false : v.dev,fixAvailable:v.fixAvailable,via:v.via})); console.log("summary", JSON.stringify(a.metadata?.vulnerabilities || {}));'
+      - name: Verify all dependencies have no high or critical advisories
+        run: npm audit --audit-level=high
+      - name: Lint
+        run: npm run lint
+      - name: Type check
+        run: npm run typecheck
+      - name: Unit and component tests
+        run: npm test
+      - name: Production build
+        run: npm run build
+      - name: Install Chrome for browser tests
+        run: npx playwright install --with-deps chrome
+      - name: Run responsive browser tests
+        run: npm run test:e2e
+      - name: Commit refreshed dependency lockfile
+        if: success()
+        run: |
+          if ! git diff --quiet -- package-lock.json; then
+            branch="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+            cp package-lock.json /tmp/refreshed-package-lock.json
+            git fetch origin "$branch"
+            git checkout -B "$branch" FETCH_HEAD
+            cp /tmp/refreshed-package-lock.json package-lock.json
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add package-lock.json
+            git commit -m "chore: refresh patched frontend dependency lockfile"
+            git push origin "$branch"
+          fi
