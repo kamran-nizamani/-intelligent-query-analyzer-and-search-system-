@@ -405,8 +405,12 @@ export class ApiClient {
       const uploadedResults = [];
 
       for (const file of files) {
-        // 1. Extract file in browser
+        // 1. Extract file in browser. Never create a Storage object or an
+        // "indexed" document row when the extractor produced no searchable chunks.
         const extracted = await extractFileInBrowser(file);
+        if (extracted.chunks.length === 0 || extracted.chunks.some((chunk) => !chunk.chunkText.trim())) {
+          throw new ApiError(`No searchable text or code was extracted from "${file.name}". The file was not uploaded.`, 422);
+        }
 
         // 2. Upload file to Supabase Storage.
         // Supabase Storage SDK may fall back to Blob.type when the original
