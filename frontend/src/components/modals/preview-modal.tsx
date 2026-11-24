@@ -68,7 +68,7 @@ export function PreviewModal({ item, onClose }: PreviewModalProps) {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
-            <Icon size={18} style={{ color: isCode ? "#60a5fa" : "#fb7185", flexShrink: 0 }} />
+            <Icon size={18} style={{ color: isCode ? "var(--c-code)" : "var(--c-doc)", flexShrink: 0 }} />
             <div style={{ minWidth: 0 }}>
               <div id="preview-title" style={{ fontSize: 15, fontWeight: 700, color: "var(--text-main)", overflowWrap: "anywhere" }}>
                 {isSearchResult ? item.title : item.name}
@@ -147,7 +147,7 @@ export function PreviewModal({ item, onClose }: PreviewModalProps) {
                 alignItems: "center",
                 justifyContent: "space-between",
                 padding: "6px 12px",
-                background: "#08090d",
+                background: "var(--bg-code)",
                 borderTopLeftRadius: 6,
                 borderTopRightRadius: 6,
                 border: "1px solid var(--border-subtle)",
@@ -179,7 +179,7 @@ export function PreviewModal({ item, onClose }: PreviewModalProps) {
 
             <pre
               style={{
-                background: "#0b0d14",
+                background: "var(--bg-code)",
                 border: "1px solid var(--border-subtle)",
                 borderBottomLeftRadius: 6,
                 borderBottomRightRadius: 6,
@@ -187,7 +187,7 @@ export function PreviewModal({ item, onClose }: PreviewModalProps) {
                 fontFamily: "var(--font-mono)",
                 fontSize: 12.5,
                 lineHeight: 1.6,
-                color: "#f1f5f9",
+                color: "var(--code-fg)",
                 overflowX: "auto",
                 whiteSpace: "pre-wrap",
                 margin: 0,

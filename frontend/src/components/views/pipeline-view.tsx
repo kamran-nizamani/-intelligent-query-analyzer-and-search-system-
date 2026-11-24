@@ -222,12 +222,12 @@ export function PipelineView({
                         ? "var(--accent-primary)"
                         : isRetrieval
                           ? "rgba(16, 185, 129, 0.2)"
-                          : "rgba(99, 102, 241, 0.2)",
+                          : "var(--accent-subtle-strong)",
                       color: isSelected
                         ? "#fff"
                         : isRetrieval
                           ? "var(--success)"
-                          : "var(--accent-primary)",
+                          : "var(--accent-text)",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -404,7 +404,7 @@ export function PipelineView({
             role="region"
             aria-label="Raw serialized stage payload"
           >
-            <pre style={{ fontSize: 11.5, fontFamily: "var(--font-mono)", color: "#a5b4fc" }}>
+            <pre style={{ fontSize: 11.5, fontFamily: "var(--font-mono)", color: "var(--code-accent)" }}>
 {JSON.stringify(selectedStage.rawOutput, null, 2)}
             </pre>
           </div>

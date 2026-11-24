@@ -57,7 +57,7 @@ export function OverviewView({
       <div
         className="surface-card"
         style={{
-          background: "linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(14, 165, 233, 0.05) 100%), var(--bg-card)",
+          background: "linear-gradient(135deg, var(--accent-subtle-strong) 0%, var(--info-subtle) 100%), var(--bg-card)",
           borderColor: "var(--border-active)",
           marginBottom: 28,
           position: "relative",
@@ -72,12 +72,12 @@ export function OverviewView({
               gap: 6,
               padding: "4px 10px",
               borderRadius: 9999,
-              background: "rgba(99, 102, 241, 0.18)",
-              color: "#a5b4fc",
+              background: "var(--accent-subtle-strong)",
+              color: "var(--accent-text)",
               fontSize: 11.5,
               fontWeight: 600,
               marginBottom: 12,
-              border: "1px solid rgba(99, 102, 241, 0.3)",
+              border: "1px solid var(--border-active)",
             }}
           >
             <Sparkles size={13} />
@@ -151,7 +151,7 @@ export function OverviewView({
         <div className="metric-card">
           <div className="metric-header">
             <span className="metric-label">Indexed Documents</span>
-            <div className="metric-icon-wrap" style={{ background: "rgba(239, 68, 68, 0.12)", color: "#f87171" }}>
+            <div className="metric-icon-wrap" style={{ background: "var(--ic-red-bg)", color: "var(--ic-red-fg)" }}>
               <FileText size={16} />
             </div>
           </div>
@@ -164,7 +164,7 @@ export function OverviewView({
         <div className="metric-card">
           <div className="metric-header">
             <span className="metric-label">Source-Code Files</span>
-            <div className="metric-icon-wrap" style={{ background: "rgba(59, 130, 246, 0.12)", color: "#60a5fa" }}>
+            <div className="metric-icon-wrap" style={{ background: "var(--ic-blue-bg)", color: "var(--ic-blue-fg)" }}>
               <Code2 size={16} />
             </div>
           </div>
@@ -177,7 +177,7 @@ export function OverviewView({
         <div className="metric-card">
           <div className="metric-header">
             <span className="metric-label">Search Index Chunks</span>
-            <div className="metric-icon-wrap" style={{ background: "rgba(16, 185, 129, 0.12)", color: "#34d399" }}>
+            <div className="metric-icon-wrap" style={{ background: "var(--ic-green-bg)", color: "var(--ic-green-fg)" }}>
               <Layers size={16} />
             </div>
           </div>
@@ -191,7 +191,7 @@ export function OverviewView({
         <div className="metric-card">
           <div className="metric-header">
             <span className="metric-label">Avg server time per search</span>
-            <div className="metric-icon-wrap" style={{ background: "rgba(245, 158, 11, 0.12)", color: "#fbbf24" }}>
+            <div className="metric-icon-wrap" style={{ background: "var(--ic-amber-bg)", color: "var(--ic-amber-fg)" }}>
               <Zap size={16} />
             </div>
           </div>
@@ -426,7 +426,7 @@ export function OverviewView({
                     }}
                   >
                     <td style={{ padding: "10px 12px", display: "flex", alignItems: "center", gap: 8 }}>
-                      <Icon size={16} style={{ color: isCode ? "#60a5fa" : "#fb7185", flexShrink: 0 }} />
+                      <Icon size={16} style={{ color: isCode ? "var(--c-code)" : "var(--c-doc)", flexShrink: 0 }} />
                       <span style={{ fontWeight: 600, color: "var(--text-main)" }}>{f.name}</span>
                     </td>
                     <td style={{ padding: "10px 12px" }}>
