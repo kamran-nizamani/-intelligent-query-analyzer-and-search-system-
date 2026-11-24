@@ -61,9 +61,9 @@ type SpeechRecognitionLike = {
 type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
 
 const MODES: Array<{ id: SearchMode; label: string; icon: typeof Layers; desc: string }> = [
-  { id: "hybrid", label: "Hybrid RRF", icon: Layers, desc: "FTS5 + FAISS fused with RRF" },
-  { id: "semantic", label: "Semantic Only", icon: Sparkles, desc: "FAISS / MiniLM vectors" },
-  { id: "lexical", label: "Keyword Only", icon: Terminal, desc: "SQLite FTS5 BM25" },
+  { id: "hybrid", label: "Hybrid RRF", icon: Layers, desc: "PostgreSQL full-text + pgvector fused with RRF" },
+  { id: "semantic", label: "Semantic Only", icon: Sparkles, desc: "pgvector / MiniLM vectors" },
+  { id: "lexical", label: "Keyword Only", icon: Terminal, desc: "PostgreSQL full-text search" },
 ];
 
 const KIND_OPTIONS: Array<{ id: "all" | SourceKind; label: string }> = [
