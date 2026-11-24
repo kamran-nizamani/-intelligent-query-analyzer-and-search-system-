@@ -69,23 +69,29 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/** Supabase Storage rejects the browser's generic application/octet-stream type.
- * Infer a safe MIME type from the supported extension when File.type is missing/generic.
+/** Always use a MIME type explicitly allowed by the Supabase documents bucket.
+ * Browser-provided File.type can be generic or differ across operating systems.
  */
 function getStorageContentType(file: File): string {
   const ext = file.name.split(".").pop()?.toLowerCase() || "";
   const mimeByExtension: Record<string, string> = {
     pdf: "application/pdf",
     docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    py: "text/x-python",
+    java: "text/x-java-source",
+    js: "application/javascript",
+    jsx: "application/javascript",
+    ts: "text/plain",
+    tsx: "text/plain",
     txt: "text/plain",
-    py: "text/plain", java: "text/plain", js: "text/plain", jsx: "text/plain",
-    ts: "text/plain", tsx: "text/plain", c: "text/plain", cpp: "text/plain",
-    h: "text/plain", cs: "text/plain", go: "text/plain", rs: "text/plain",
-    php: "text/plain", rb: "text/plain", sql: "text/plain", html: "text/plain",
-    css: "text/plain", sh: "text/plain",
+    c: "text/plain", cpp: "text/plain", h: "text/plain",
+    cs: "text/plain", go: "text/plain", rs: "text/plain",
+    php: "text/plain", rb: "text/plain", sql: "text/plain",
+    html: "text/plain", css: "text/plain", sh: "text/plain",
   };
 
-  if (file.type && file.type !== "application/octet-stream") return file.type;
+  // Do not pass File.type through: it may be application/octet-stream or
+  // another browser-specific value that the Storage bucket rejects.
   return mimeByExtension[ext] || "text/plain";
 }
 
