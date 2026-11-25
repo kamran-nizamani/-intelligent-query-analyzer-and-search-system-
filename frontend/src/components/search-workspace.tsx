@@ -141,7 +141,7 @@ export function SearchWorkspace() {
     if (typeof window === "undefined") return;
     const idleTimer = setTimeout(() => {
       import("@/lib/embeddings/web-embedder")
-        .then((m) => m.getWebEmbedder().catch(() => {}))
+        .then((m) => m.warmUpEmbedder().catch(() => {}))
         .catch(() => {});
     }, 1500);
     return () => clearTimeout(idleTimer);
