@@ -179,9 +179,9 @@ export function SettingsView({
                   outline: "none",
                 }}
               >
-                <option value="hybrid">Hybrid (FTS5 + FAISS via RRF)</option>
-                <option value="semantic">Semantic (FAISS Dense Vector Only)</option>
-                <option value="lexical">Lexical (SQLite FTS5 BM25 Only)</option>
+                <option value="hybrid">Hybrid (PostgreSQL FTS + pgvector via RRF)</option>
+                <option value="semantic">Semantic (pgvector similarity)</option>
+                <option value="lexical">Lexical (PostgreSQL full-text search)</option>
               </select>
             </div>
 
@@ -211,6 +211,8 @@ export function SettingsView({
                 <option value={5}>Top 5 Candidates</option>
                 <option value={10}>Top 10 Candidates</option>
                 <option value={20}>Top 20 Candidates</option>
+                <option value={50}>Top 50 Candidates</option>
+                <option value={50}>Top 50 Candidates</option>
               </select>
             </div>
 

@@ -69,6 +69,14 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/** An explicit "top/show/first/limit N" request takes precedence over saved settings. */
+export function resolveResultLimit(query: string, configuredLimit = 10): number {
+  const match = query.match(/\b(?:top|first|limit|show|return)\s+(\d{1,3})\b/i);
+  const requested = match ? Number(match[1]) : configuredLimit;
+  if (!Number.isFinite(requested)) return 10;
+  return Math.max(1, Math.min(100, Math.floor(requested)));
+}
+
 /** Always use a MIME type explicitly allowed by the Supabase documents bucket.
  * Browser-provided File.type can be generic or differ across operating systems.
  */
@@ -180,6 +188,7 @@ export class ApiClient {
       const t0 = performance.now();
       const trace = compileQueryTrace(query);
       const plan = trace.optimizedIr;
+      const requestedLimit = resolveResultLimit(query, options.limit || plan.limit || 10);
 
       // Generate dense vectors only when the selected mode needs semantic retrieval.
       const searchMode = options.mode || "hybrid";
@@ -206,12 +215,17 @@ export class ApiClient {
         lexical_rank?: number;
         vector_rank?: number;
         rrf_score: number;
+        vector_similarity?: number | null;
       }
 
-      const { data, error } = await supabase.rpc("search_chunks_v3", {
+      const { data, error } = await supabase.rpc("search_chunks_v4", {
         query_text: plan.lexicalQuery || query,
         query_embedding: embedding,
-        match_limit: options.limit || plan.limit || 10,
+        match_limit: requestedLimit,
+        max_cosine_distance: 0.55,
+        max_per_document: 3,
+        lexical_weight: 1.2,
+        semantic_weight: 1.0,
         filter_kind: options.kind && options.kind !== "all"
           ? options.kind
           : (plan.filters.content_kind as string) || null,
@@ -270,6 +284,7 @@ export class ApiClient {
           score: +row.rrf_score.toFixed(4),
           lexicalRank: row.lexical_rank,
           semanticRank: row.vector_rank,
+          semanticSimilarity: row.vector_similarity ?? null,
           matchType,
           updated: "Indexed",
           tags,
@@ -307,7 +322,7 @@ export class ApiClient {
           mode: options.mode || "hybrid",
           kind: options.kind || "all",
           type: options.type || "ALL",
-          limit: options.limit || 10,
+          limit: requestedLimit,
         }),
       },
       "Search request failed",

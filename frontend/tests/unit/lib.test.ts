@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiClient, ApiError } from "@/lib/api-client";
+import { ApiClient, ApiError, resolveResultLimit } from "@/lib/api-client";
 import { MAX_UPLOAD_BYTES, validateUploads } from "@/lib/upload-validation";
 import { extractHighlightTerms } from "@/lib/highlight";
 import { compileQueryTrace } from "@/lib/compiler-engine";
+import { sanitizePdfPageText, validateExtractedPdfText } from "@/lib/extractors/client-extractors";
 
 const file = (name: string, size: number) => new File([new Uint8Array(size)], name);
 
@@ -127,5 +128,42 @@ describe("local compiler approximation (offline fallback only)", () => {
     expect(t.ast.language).toBe("python");
     expect(t.stages.length).toBeGreaterThanOrEqual(7);
     expect(t.optimizedIr.limit).toBeGreaterThan(0);
+  });
+});
+
+
+describe("search result limits", () => {
+  it("uses the saved preference unless the query explicitly requests a count", () => {
+    expect(resolveResultLimit("Find Python functions", 20)).toBe(20);
+    expect(resolveResultLimit("Find the top 50 Python functions", 10)).toBe(50);
+    expect(resolveResultLimit("show 200 results", 10)).toBe(100);
+    expect(resolveResultLimit("limit 0", 10)).toBe(1);
+  });
+});
+
+describe("PDF text quality", () => {
+  it("removes PDF trailer syntax and long encoded payload lines", () => {
+    const payload = "A".repeat(220);
+    const cleaned = sanitizePdfPageText(
+      "Python functions process CSV rows and validate their columns.\n" +
+      "startxref\n12345\n%%EOF\n" +
+      payload
+    );
+    expect(cleaned).toContain("Python functions process CSV rows");
+    expect(cleaned).not.toContain("startxref");
+    expect(cleaned).not.toContain("%%EOF");
+    expect(cleaned).not.toContain(payload);
+  });
+
+  it("rejects a PDF whose extracted text is only structural metadata", () => {
+    expect(() => validateExtractedPdfText("xref trailer startxref %%EOF endobj")).toThrow(
+      /no readable text layer/i
+    );
+  });
+
+  it("preserves readable technical text, identifiers, and mathematical symbols", () => {
+    const source = "Python function process_csv(file_path) reads CSV rows, checks x >= 0, and returns parsed records.";
+    expect(validateExtractedPdfText(source)).toContain("process_csv");
+    expect(validateExtractedPdfText(source)).toContain("x >= 0");
   });
 });

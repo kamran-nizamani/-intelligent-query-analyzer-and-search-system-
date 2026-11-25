@@ -716,7 +716,7 @@ export function SearchView({
                       }}
                     >
                       <Sparkles size={12} aria-hidden="true" />
-                      <span>Score {result.score.toFixed(4)}</span>
+                      <span title="Reciprocal Rank Fusion score; not a probability">RRF {result.score.toFixed(4)}</span>
                     </span>
 
                     {result.lexicalRank != null && (
@@ -727,6 +727,21 @@ export function SearchView({
                     {result.semanticRank != null && (
                       <span className="badge badge-semantic" style={{ fontSize: 10.5 }}>
                         Semantic #{result.semanticRank}
+                      </span>
+                    )}
+                    {result.semanticSimilarity != null && (
+                      <span className="badge badge-semantic" style={{ fontSize: 10.5 }}
+                        title="Cosine similarity from the embedding model; distinct from the RRF score">
+                        Similarity {result.semanticSimilarity.toFixed(2)}
+                      </span>
+                    )}
+                    {result.semanticSimilarity != null && (
+                      <span
+                        className="badge badge-semantic"
+                        style={{ fontSize: 10.5 }}
+                        title="Cosine similarity from the embedding model; separate from the Reciprocal Rank Fusion score."
+                      >
+                        Similarity {result.semanticSimilarity.toFixed(2)}
                       </span>
                     )}
                   </div>

@@ -18,6 +18,7 @@ export type SearchResult = {
   score: number;
   lexicalRank?: number;
   semanticRank?: number;
+  semanticSimilarity?: number | null;
   matchType?: "hybrid" | "semantic" | "lexical";
   updated: string;
   tags: string[];
